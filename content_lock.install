@@ -1,0 +1,103 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_install().
+ */
+function content_lock_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("
+        CREATE TABLE {content_lock} (
+          nid int(10) unsigned NOT NULL default '0',
+          uid int(10) unsigned NOT NULL default '0',
+          persistent tinyint(1) unsigned NOT NULL default '0',
+          timestamp int(10) unsigned NOT NULL default '0',
+          PRIMARY KEY (nid),
+          KEY (uid)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */"
+      );
+      break;
+
+    case 'pgsql':
+      db_query("
+        CREATE TABLE {content_lock} (
+          nid INTEGER NOT NULL DEFAULT 0,
+          uid INTEGER NOT NULL DEFAULT 0,
+          persistent SMALLINT NOT NULL DEFAULT 0,
+          timestamp INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (nid)
+        )"
+      );
+      db_query("CREATE INDEX {content_lock}_uid_idx ON {content_lock}(uid)");
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function content_lock_uninstall() {
+  db_query("DROP TABLE {content_lock}");
+  variable_del('content_lock_clear');
+}
+
+/**
+ * Helper function to add a permission to a role.
+ */
+function _content_lock_add_permission($rid, $permission) {
+  if ($permission) {
+    $current_perm = db_result(db_query("SELECT perm FROM {permission} WHERE rid = %d", $rid));
+    if ($current_perm != '') {
+      $current_perm .= ', ';
+    }
+    $current_perm .= $permission;
+    db_query("UPDATE {permission} SET perm = '%s' WHERE rid = %d", $current_perm, $rid);
+  }
+}
+
+/**
+ * Update schema from Drupal 4.7.x to 5.x.
+ */
+function content_lock_update_1() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      $ret[] = update_sql("ALTER TABLE {content_lock} CHANGE checkedout persistent tinyint(1) unsigned NOT NULL default '0'");
+      $ret[] = update_sql("ALTER TABLE {content_lock} CHANGE date timestamp int(10) unsigned NOT NULL default '0'");
+      $ret[] = update_sql("ALTER TABLE {content_lock} ADD KEY uid (uid)");
+      break;
+
+    case 'pgsql':
+      db_change_column($ret, 'content_lock', 'checkedout', 'persistent', 'smallint', array('not null' => TRUE, 'default' => 0));
+      db_change_column($ret, 'content_lock', 'date', 'timestamp', 'integer', array('not null' => TRUE, 'default' => 0));
+      $ret[] = update_sql("CREATE INDEX {content_lock}_uid_idx ON {content_lock}(uid)");
+      break;
+  }
+  return $ret;
+}
+
+/**
+ * Move the persistent check-out setting to the permissions table.
+ */
+function content_lock_update_2() {
+  $ret = array();
+
+  // When persistent check-out was enabled, add a permission to every role
+  // that has the "check out documents" permission.
+  if (variable_get('content_lockt_long', 0)) {
+    foreach (user_roles(0, 'check out documents') as $rid => $role) {
+      _content_lock_add_permission($rid, 'keep documents checked out');
+    }
+  }
+  variable_del('content_lock_long');
+
+  $ret[] = array(
+    'query' => 'The access permissions have been updated by the content_lock module.',
+    'success' => TRUE
+  );
+  return $ret;
+}
+
