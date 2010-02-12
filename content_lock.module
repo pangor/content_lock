@@ -387,8 +387,9 @@ function content_lock_warn_pending_locks($uid) {
   while($lock = db_fetch_object($result)) {
     // we have warned this one already, lets pass
     $node = node_load($lock->nid);
-    $unlocklink = "/admin/content/$node->nid/content_lock/releaseown";    //
-    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to <a href='!unlocklink'>unlock</a> this node, click <a href='!unlocklink'>here</a> to do so", array ('!nodetitle' => $node->title, '!unlocklink' => $unlocklink)),"error", false);
+    $unlocklink = l(t('unlock'),"admin/content/$node->nid/content_lock/releaseown");
+    $unlocklinkhere = l(t('here'),"admin/content/$node->nid/content_lock/releaseown");
+    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to !unlock this node, click !unlocklinkhere to do so", array ('!nodetitle' => $node->title, '!unlocklink' => $unlocklink, '!unlocklinkhere' => $unlocklinkhere)),"error", false);
   }
 }
 /**
