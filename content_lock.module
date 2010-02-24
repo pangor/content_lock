@@ -71,58 +71,15 @@ function content_lock_menu() {
     'access arguments' => array('check out documents'),
     'type' => MENU_CALLBACK
   );
+  $items['node/%/canceledit'] = array (
+        'page callback' => 'content_lock_release_own_item',
+        'page arguments' => array(1),
+        'access callback' => true
+  );
 
   return $items;
 }
 
-/**
- * Implementation of hook_form_alter().
- */
-function content_lock_form_alter(&$form, $form_state, $form_id) {
-  if (isset($form['type']) && $form['type']['#value'] .'_node_form' == $form_id) {
-    if (user_access('check out documents') && user_access('keep documents checked out')) {
-      $form['content_lock'] = array(
-        '#type' => 'checkbox',
-        '#title' => t('Keep document locked'),
-        '#return_value' => 1,
-        '#weight' => 21, // Place immediately after log message.
-        '#default_value' => FALSE,
-        '#description' => t('Check this box if you want to keep this document locked in your name after submitting it.'),
-      );
-    }
-  }
-  else if ($form_id == 'node_configure') {
-    // Make sure our element appears before the submit buttons.
-    $form['buttons']['#weight'] = 10;
-
-    $period = array(0 => t('Disabled')) + drupal_map_assoc(array(3600, 10800, 21600, 32400, 43200, 86400, 172800, 259200, 604800, 1209600, 2419200, 4838400, 9676800), 'format_interval');
-    $form['content_lock_clear'] = array(
-      '#type' => 'select',
-      '#title' => t('Automatic check-in'),
-      '#default_value' => variable_get('content_lock_clear', 0),
-      '#options' => $period,
-      '#description' => t('The period after which locked documents will be automatically released.'),
-    );
-  }
-
-  global $user;
-  // we are not allowed to lock on users form edit, as it always returns to the edit form..
-  $node_type_blacklist = array("user" => true);
-  $node = $form['#node'];
-  if(!$user->uid || !user_access('check out documents') || $node == NULL || $node_type_blacklist[$node->type] || $node->type."_node_form" != $form_id) {
-    // we are not editing a node, so we dont need all this options. lets cancel
-    return $form;
-  }
-  $nid = $form['nid']['#value'];
-
-  if($form_state['submitted'] === false && $nid != "" && $form_id != "comment_form") {
-    /// node editing starts and we are editing a node and not adding a comment
-    // current nid
-    if(content_lock_node($nid, $user->uid) == false) {// could not lock node, its locked by someone else
-      drupal_goto("node/$nid");
-    }
-  }
-}
 
 /**
  * Implementation of hook_nodeapi().
@@ -169,6 +126,107 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
       break;
   }
 }
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function content_lock_form_alter(&$form, $form_state, $form_id) {
+  global $user;
+  _content_lock_add_nodeadministration(&$form, $form_state, $form_id);
+  _content_lock_add_cancelbutton(&$form, $form_state, $form_id);
+
+  // this form are blacklisten, so nodes of this type never get locked
+  $node_type_blacklist = array(
+    "user" => true   // we are not allowed to lock on users form edit, as it always returns to the edit form..
+  );
+
+  $node = $form['#node'];
+  $nid = $form['nid']['#value'];
+
+  if( $node_type_blacklist[$node->type] !== true  // If this node is blacklisted, dont lock
+      && user_access('check out documents')       // The user must have this permission to be able to lock
+      && ($node->type."_node_form" == $form_id)   // Dont lock if we are administrating the node-type
+      && ($node != NULL)                          // If we somehow have no node, no need to lock at all
+      && ($user->uid>0)                           // A valid user is needed for locking
+      && ($form_state['submitted'] === false)     // submitted: if submitted is true and we are still triggering form_alter its preview, so dont lock once again
+      && (!empty($nid))                           // nid: If we have no nid, we are adding a node and therefor we need not locking.
+      && $form_id != "comment_form")              // form_id: if we just got called because of adding a comment, we dont need to lock the node itself
+    {
+    // Finally set the lock if everthing passed.
+    if(content_lock_node($nid, $user->uid) == false) {
+      // could not lock node, its locked by someone else
+      drupal_goto("node/$nid");
+    }
+  }
+}
+
+function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
+  $form['buttons']['#prefix'] = "<div class='buttons-wrapper'>";
+  $form['buttons']['#posfix'] = "</div>";
+  if (isset($form['type']) && $form['type']['#value'] .'_node_form' == $form_id) {
+    if (user_access('check out documents') && user_access('keep documents checked out')) {
+      $form['content_lock'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Keep document locked'),
+          '#return_value' => 1,
+          '#weight' => 21, // Place immediately after log message.
+          '#default_value' => FALSE,
+          '#description' => t('Check this box if you want to keep this document locked in your name after submitting it.'),
+      );
+    }
+  }
+  else if ($form_id == 'node_configure') {
+    // Make sure our element appears before the submit buttons.
+    $form['buttons']['#weight'] = 10;
+
+    $period = array(0 => t('Disabled')) + drupal_map_assoc(array(3600, 10800, 21600, 32400, 43200, 86400, 172800, 259200, 604800, 1209600, 2419200, 4838400, 9676800), 'format_interval');
+    $form['content_lock_clear'] = array(
+        '#type' => 'select',
+        '#title' => t('Automatic check-in'),
+        '#default_value' => variable_get('content_lock_clear', 0),
+        '#options' => $period,
+        '#description' => t('The period after which locked documents will be automatically released.'),
+    );
+  }
+}
+
+function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
+  if (isset($form['#id'])) {
+    if( $form['#id'] == 'comment-form' ) {
+      $node = $form['#node'];
+      $form['cancel']['#type'] = 'markup';
+      $form['cancel']['#weight'] = 2000;
+      $form['cancel']['#value'] = l(t('Cancel'), 'node/' . $form['nid']['#value']."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+    }
+    else if( $form['#id'] == 'user-profile-form' ) {
+      $form['buttons'] = array('#weight' => 20000);
+      $form['buttons']['submit'] = $form['submit'];
+      $form['buttons']['submit']['#weight'] = -5;
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+
+      unset($form['submit']);
+    }
+    // edit node
+    else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') && ( is_numeric(arg(1)) )){
+      $node = $form['#node'];
+
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+    }
+    // add node
+    else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') ){
+      $node = $form['#node'];
+
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), '', array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+    }
+  }
+}
+
 
 /**
  * Implementation of hook_cron().
@@ -379,7 +437,6 @@ function content_lock_release_item($nid, $account = NULL) {
  * with an link to release this node.
  *
  */
-
 function content_lock_warn_pending_locks($uid) {
   // cache
   global $warned_nodes;
@@ -389,9 +446,10 @@ function content_lock_warn_pending_locks($uid) {
     $node = node_load($lock->nid);
     $unlocklink = l(t('unlock'),"admin/content/$node->nid/content_lock/releaseown");
     $unlocklinkhere = l(t('here'),"admin/content/$node->nid/content_lock/releaseown");
-    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to !unlock this node, click !unlocklinkhere to do so", array ('!nodetitle' => $node->title, '!unlocklink' => $unlocklink, '!unlocklinkhere' => $unlocklinkhere)),"error", false);
+    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to !unlock this node, click !unlocklinkhere to do so", array ('!nodetitle' => $node->title, '!unlock' => $unlocklink, '!unlocklinkhere' => $unlocklinkhere)),"error", false);
   }
 }
+
 /**
  * Release the lock of a node. We are using the current users uid, so the user only can delete
  * his own locks. We never fail, as if the lock does not exist, the node is unlocked anyway
@@ -402,9 +460,9 @@ function content_lock_release_own_item($node) {
   if($node != NULL) {
     content_lock_release($node,$user->uid,true);    //
     drupal_set_message(t('Removed edit lock'));
-    drupal_goto("/node/$node");
+    drupal_goto("node/$node");
   }
   else { // thats what we do, if a user was creating a node and canceled
-    drupal_goto("/");
+    drupal_goto();
   }
 }
