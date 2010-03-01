@@ -5,42 +5,63 @@
  * Implementation of hook_install().
  */
 function content_lock_install() {
-  switch ($GLOBALS['db_type']) {
-    case 'mysql':
-    case 'mysqli':
-      db_query("
-        CREATE TABLE {content_lock} (
-          nid int(10) unsigned NOT NULL default '0',
-          uid int(10) unsigned NOT NULL default '0',
-          persistent tinyint(1) unsigned NOT NULL default '0',
-          timestamp int(10) unsigned NOT NULL default '0',
-          PRIMARY KEY (nid),
-          KEY (uid)
-        ) /*!40100 DEFAULT CHARACTER SET utf8 */"
-      );
-      break;
-
-    case 'pgsql':
-      db_query("
-        CREATE TABLE {content_lock} (
-          nid INTEGER NOT NULL DEFAULT 0,
-          uid INTEGER NOT NULL DEFAULT 0,
-          persistent SMALLINT NOT NULL DEFAULT 0,
-          timestamp INTEGER NOT NULL DEFAULT 0,
-          PRIMARY KEY (nid)
-        )"
-      );
-      db_query("CREATE INDEX {content_lock}_uid_idx ON {content_lock}(uid)");
-      break;
+  drupal_install_schema('content_lock');
   }
-}
 
 /**
  * Implementation of hook_uninstall().
  */
 function content_lock_uninstall() {
-  db_query("DROP TABLE {content_lock}");
+  drupal_uninstall_schema('content_lock');
   variable_del('content_lock_clear');
+}
+
+/*
+ * Implementaion of hook_schema().
+ */
+function content_lock_schema() {
+  $schema['content_lock'] = array(
+    'description' => 'content lock module table.',
+    'fields' => array(
+      'nid' => array(
+        'description' => 'The primary identifier for a node.',
+        'type' => 'int',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uid' => array(
+        'description' => 'User that holds the lock.',
+        'type' => 'int',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'persistent' => array(
+        'description' => 'Persistent locking.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'timestamp' => array(
+        'description' => 'Time the lock occured.',
+        'size' => 'normal',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'user' => array('uid'),
+    ),
+    'primary key' => array('nid'),
+  );
+  return $schema;
 }
 
 /**
@@ -62,20 +83,28 @@ function _content_lock_add_permission($rid, $permission) {
  */
 function content_lock_update_1() {
   $ret = array();
-  switch ($GLOBALS['db_type']) {
-    case 'mysql':
-    case 'mysqli':
-      $ret[] = update_sql("ALTER TABLE {content_lock} CHANGE checkedout persistent tinyint(1) unsigned NOT NULL default '0'");
-      $ret[] = update_sql("ALTER TABLE {content_lock} CHANGE date timestamp int(10) unsigned NOT NULL default '0'");
-      $ret[] = update_sql("ALTER TABLE {content_lock} ADD KEY uid (uid)");
-      break;
+  db_change_field($ret, 'content_lock', 'checkedout', 'persistent',
+    array(
+      'description' => 'Persistent locking.',
+      'type' => 'int',
+      'size' => 'tiny',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    )
+  );
+  db_change_field($ret, 'content_lock', 'checkedout', 'persistent',
+    array(
+      'description' => 'Time the lock occured.',
+      'size' => 'normal',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    )
+  );
 
-    case 'pgsql':
-      db_change_column($ret, 'content_lock', 'checkedout', 'persistent', 'smallint', array('not null' => TRUE, 'default' => 0));
-      db_change_column($ret, 'content_lock', 'date', 'timestamp', 'integer', array('not null' => TRUE, 'default' => 0));
-      $ret[] = update_sql("CREATE INDEX {content_lock}_uid_idx ON {content_lock}(uid)");
-      break;
-  }
+  db_add_index($ret, 'content_lock', 'user', array('uid'));
   return $ret;
 }
 

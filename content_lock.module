@@ -227,7 +227,6 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
   }
 }
 
-
 /**
  * Implementation of hook_cron().
  *
@@ -330,7 +329,15 @@ function content_lock_node($nid, $uid) {
   }
   else {
     // Lock node.
-    db_query("INSERT INTO {content_lock} (nid, uid, timestamp) VALUES (%d, %d, %d)", $nid, $uid, time());
+    $data = array(
+      'nid' => $nid,
+      'uid' => $uid,
+      'timestamp' => time()
+    );
+    drupal_write_record(
+      'content_lock',
+      $data
+    );
     drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
   }
 
@@ -344,7 +351,17 @@ function content_lock_node($nid, $uid) {
  *   The node id to lock persistently.
  */
 function content_lock_persistent($nid) {
-  db_query("UPDATE {content_lock} SET persistent = 1 WHERE nid = %d", $nid);
+  $data = array(
+    'presistent' => 1,
+  );
+  $key = array(
+    'nid' => $nid,
+  );
+  drupal_write_record(
+    'content_lock',
+    $data,
+    $key
+  );
 }
 
 /**
