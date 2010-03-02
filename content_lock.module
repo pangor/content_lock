@@ -162,7 +162,7 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
 
 function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
   $form['buttons']['#prefix'] = "<div class='buttons-wrapper'>";
-  $form['buttons']['#posfix'] = "</div>";
+  $form['buttons']['#suffix'] = "</div>";
   if (isset($form['type']) && $form['type']['#value'] .'_node_form' == $form_id) {
     if (user_access('check out documents') && user_access('keep documents checked out')) {
       $form['content_lock'] = array(
