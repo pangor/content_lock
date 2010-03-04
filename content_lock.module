@@ -200,13 +200,18 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
     }
     else if( $form['#id'] == 'user-profile-form' ) {
       $form['buttons'] = array('#weight' => 20000);
-      $form['buttons']['submit'] = $form['submit'];
-      $form['buttons']['submit']['#weight'] = -5;
+      //$form['buttons']['submit'] = $form['submit'];
+      //$form['buttons']['submit']['#weight'] = -5;
+      unset($form['submit']);
+      if(isset($form['delete'])) {
+        $form['buttons']['delbtn'] = $form['delete'];
+        $form['buttons']['delbtn']['#weight'] = -4;
+      }
+
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
       $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
-
-      unset($form['submit']);
+      unset($form['delete']);
     }
     // edit node
     else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') && ( is_numeric(arg(1)) )){
