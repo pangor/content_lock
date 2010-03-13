@@ -200,9 +200,8 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
     }
     else if( $form['#id'] == 'user-profile-form' ) {
       $form['buttons'] = array('#weight' => 20000);
-      //$form['buttons']['submit'] = $form['submit'];
-      //$form['buttons']['submit']['#weight'] = -5;
-      unset($form['submit']);
+      	$form['buttons']['submit'] = $form['submit'];
+	$form['buttons']['submit']['#weight'] = -5;
       if(isset($form['delete'])) {
         $form['buttons']['delbtn'] = $form['delete'];
         $form['buttons']['delbtn']['#weight'] = -4;
@@ -480,8 +479,7 @@ function content_lock_release_own_item($node) {
   global $user;
 
   if($node != NULL) {
-    content_lock_release($node,$user->uid,true);    //
-    drupal_set_message(t('Removed edit lock'));
+    content_lock_release($node,$user->uid,true);
     drupal_goto("node/$node");
   }
   else { // thats what we do, if a user was creating a node and canceled
