@@ -77,9 +77,18 @@ function content_lock_menu() {
         'access callback' => true
   );
 
+  $items['admin/settings/content_lock'] = array (
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Content lock',
+    'description' => 'Configuration options for the Content lock module',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('content_lock_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'content_lock.admin.inc'
+   );
+
   return $items;
 }
-
 
 /**
  * Implementation of hook_nodeapi().
@@ -133,8 +142,10 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
 function content_lock_form_alter(&$form, $form_state, $form_id) {
   global $user;
   _content_lock_add_nodeadministration(&$form, $form_state, $form_id);
-  _content_lock_add_cancelbutton(&$form, $form_state, $form_id);
 
+  if(variable_get('content_lock_admin_cancelbutton', true)) {
+    _content_lock_add_cancelbutton(&$form, $form_state, $form_id);
+  }
   // this form are blacklisten, so nodes of this type never get locked
   $node_type_blacklist = array(
     "user" => true   // we are not allowed to lock on users form edit, as it always returns to the edit form..
@@ -158,6 +169,10 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
       drupal_goto("node/$nid");
     }
   }
+}
+
+function _content_lock_verbose() {
+  return variable_get('content_lock_admin_verbose', true);
 }
 
 function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
@@ -200,8 +215,8 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
     }
     else if( $form['#id'] == 'user-profile-form' ) {
       $form['buttons'] = array('#weight' => 20000);
-      	$form['buttons']['submit'] = $form['submit'];
-	$form['buttons']['submit']['#weight'] = -5;
+      $form['buttons']['submit'] = $form['submit'];
+	    $form['buttons']['submit']['#weight'] = -5;
       if(isset($form['delete'])) {
         $form['buttons']['delbtn'] = $form['delete'];
         $form['buttons']['delbtn']['#weight'] = -4;
@@ -242,7 +257,9 @@ function content_lock_cron() {
     $result = db_query('DELETE FROM {content_lock} WHERE timestamp < %d', time() - $content_lock_clear);
     if ($num = db_affected_rows($result)) {
       $period = format_interval($content_lock_clear);
-      drupal_set_message(format_plural($num, 'Released one document locked for more than @period.', 'Released @count documents locked for more than @period.', array('@period' => $period)));
+      if(_content_lock_verbose()) {
+        drupal_set_message(format_plural($num, 'Released one document locked for more than @period.', 'Released @count documents locked for more than @period.', array('@period' => $period)));
+      }
       watchdog('content_lock', 'Released @count document(s) locked for more than @period.', array('@count' => $num, '@period' => $period));
     }
   }
@@ -342,7 +359,9 @@ function content_lock_node($nid, $uid) {
       'content_lock',
       $data
     );
-    drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+    if(_content_lock_verbose()) {
+      drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+    }
   }
 
   return TRUE;
@@ -449,7 +468,9 @@ function content_lock_overview($account = NULL) {
  */
 function content_lock_release_item($nid, $account = NULL) {
   content_lock_release($nid, $account ? $account->uid : NULL, TRUE);
-  drupal_set_message(t('The editing lock has been released.'));
+  if(_content_lock_verbose()) {
+    drupal_set_message(t('The editing lock has been released.'));
+  }
   drupal_goto($account ? "user/$account->uid/content_lock" : 'admin/content/node/content_lock');
 }
 
