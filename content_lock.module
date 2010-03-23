@@ -77,6 +77,12 @@ function content_lock_menu() {
         'access callback' => true
   );
 
+  $items['ajax/content_lock/%/canceledit'] = array (
+        'page callback' => 'content_lock_release_own_item',
+        'page arguments' => array(2,false),
+        'access callback' => true
+  );
+
   $items['admin/settings/content_lock'] = array (
     'type' => MENU_NORMAL_ITEM,
     'title' => 'Content lock',
@@ -95,6 +101,7 @@ function content_lock_menu() {
  */
 function content_lock_nodeapi(&$node, $op, $teaser, $page) {
   global $user;
+  static $messages_shown = false;
 
   switch ($op) {
     case 'validate':
@@ -114,7 +121,6 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
         }
       }
       break;
-
     case 'insert':
     case 'update':
       if (!empty($node->content_lock)) {
@@ -131,6 +137,10 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
 
     case 'view':
       global $user;
+      if(!$messages_shown) {
+        _content_lock_show_warnings();
+        $messages_shown = true;
+      }
       content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
       break;
   }
@@ -158,17 +168,32 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
       && user_access('check out documents')       // The user must have this permission to be able to lock
       && ($node->type."_node_form" == $form_id)   // Dont lock if we are administrating the node-type
       && ($node != NULL)                          // If we somehow have no node, no need to lock at all
-      && ($user->uid>0)                           // A valid user is needed for locking
-      && ($form_state['submitted'] === false)     // submitted: if submitted is true and we are still triggering form_alter its preview, so dont lock once again
+      && ($user->uid > 0)                           // A valid user is needed for locking
+      && ($form_state['submitted'] === false)     // submitted: is true if we save, but false if its a preview. We dont want to try to lock and saves
       && (!empty($nid))                           // nid: If we have no nid, we are adding a node and therefor we need not locking.
       && $form_id != "comment_form")              // form_id: if we just got called because of adding a comment, we dont need to lock the node itself
     {
-    // Finally set the lock if everthing passed.
-    if(content_lock_node($nid, $user->uid) == false) {
-      // could not lock node, its locked by someone else
-      drupal_goto("node/$nid");
+    _content_lock_add_unload_js($form);
+    if(isset($form_state['post']) && is_array($form_state['post']) && $form_state['post']['form_build_id'] != '') {
+      // We are handling a preview (yes thats the condition to detect that..).
+      // We dont need anything here right now
+    }
+    else {
+      // Finally set the lock if everthing passed.
+      if(content_lock_node($nid, $user->uid) == false) {
+        // could not lock node, its locked by someone else
+        drupal_goto("node/$nid");
+      }
     }
   }
+}
+
+function _content_lock_add_unload_js($form) {
+  $m = drupal_get_path('module','content_lock');
+  drupal_add_js("$m/js/jquery.url.packed.js",'module');
+  drupal_add_js("$m/js/onUserExit.js",'module');
+  drupal_add_js("$m/js/content_lock_init.js",'module');
+  drupal_add_js(array('content_lock' => array('nid' => $form['#node']->nid)), 'setting');
 }
 
 function _content_lock_verbose() {
@@ -329,8 +354,6 @@ function content_lock_node($nid, $uid) {
     // Deny editing this node even if the node is locked by the same user.
     // The only exception to this rule is when the user had previously acquired
     // a persistent lock.
-
-
     if ($lock->uid != $uid) {
       $message = content_lock_lock_owner($lock);
 
@@ -482,29 +505,94 @@ function content_lock_release_item($nid, $account = NULL) {
  */
 function content_lock_warn_pending_locks($uid) {
   // cache
-  global $warned_nodes;
-  $result = db_query("SELECT * FROM {content_lock} WHERE uid = %d", $uid);
-  while($lock = db_fetch_object($result)) {
-    // we have warned this one already, lets pass
-    $node = node_load($lock->nid);
-    $unlocklink = l(t('unlock'),"admin/content/$node->nid/content_lock/releaseown");
-    $unlocklinkhere = l(t('here'),"admin/content/$node->nid/content_lock/releaseown");
-    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to !unlock this node, click !unlocklinkhere to do so", array ('!nodetitle' => $node->title, '!unlock' => $unlocklink, '!unlocklinkhere' => $unlocklinkhere)),"error", false);
+  static $warned_nodes = array();
+  static $content_lock_messages_printed = false;
+  if($content_lock_messages_printed) {
+    return;
   }
+
+  if(array_key_exists($uid,$warned_nodes)){
+    // do nothing
+  }
+  else {
+    // load form db
+    $warned_nodes[$uid] = array();
+    $result = db_query("SELECT cl.nid,n.title FROM {content_lock} as cl LEFT JOIN {node} as n on cl.nid=n.nid WHERE cl.uid = %d", $uid);
+    while($lock = db_fetch_object($result)) {
+      $warned_nodes[$uid][] = $lock;
+    }
+  }
+
+  foreach($warned_nodes[$uid] as $lock) {
+    $editlink = l(t('edit'),"node/{$lock->nid}/edit");
+    $unlocklinkhere = l(t('here'),"admin/content/{$lock->nid}/content_lock/releaseown");
+    _content_lock_save_lock_warning(t("You are currently blocking the node '!nodetitle' against edits. You might want this by clicking !unlocklinkhere, or !edit the node", array ('!nodetitle' => $lock->title, '!edit' => $editlink, '!unlocklinkhere' => $unlocklinkhere)),$lock->nid);
+  }
+  $content_lock_messages_printed = true;
+}
+
+function _content_lock_save_lock_warning($message, $nid) {
+  if(empty($_SESSION['content_lock'])) {
+    $_SESSION['content_lock'] = '';
+  }
+  $data = unserialize($_SESSION['content_lock']);
+  if(!is_array($data)) {
+    $data = array();
+  }
+
+  if(array_key_exists($nid,$data)) {
+    return;
+  }
+
+  $data[$nid] = $message;
+  $_SESSION['content_lock'] = serialize($data);
+}
+
+function _content_lock_show_warnings() {
+  global $user;
+  if(empty($_SESSION['content_lock'])) {
+    return;
+  }
+  $data = unserialize($_SESSION['content_lock']);
+  if(!is_array($data) || count($data) == 0) {
+    return;
+  }
+  foreach($data as $nid => $messsage) {
+    if(_content_lock_still_locked($user->uid,$nid) > 0){
+      drupal_set_message($messsage,'warning');
+    }
+  }
+  $_SESSION['content_lock'] = '';
+}
+
+function _content_lock_still_locked($uid,$nid) {
+  $result = db_result(db_query("SELECT count(cl.nid) FROM {content_lock} as cl  WHERE cl.uid = %d AND cl.nid=%d", $uid,$nid));
+  return $result;
 }
 
 /**
  * Release the lock of a node. We are using the current users uid, so the user only can delete
  * his own locks. We never fail, as if the lock does not exist, the node is unlocked anyway
  */
-function content_lock_release_own_item($node) {
+function content_lock_release_own_item($nid, $response = true) {
   global $user;
 
-  if($node != NULL) {
-    content_lock_release($node,$user->uid,true);
-    drupal_goto("node/$node");
+  if($nid != NULL) {
+    content_lock_release($nid,$user->uid,true);
+   // drupal_get_messages();
+    if($response) {
+      drupal_goto("node/$nid");
+    }
+    else {
+      exit();
+    }
   }
   else { // thats what we do, if a user was creating a node and canceled
-    drupal_goto();
+    if($response) {
+      drupal_goto();
+    }
+    else {
+      exit();
+    }
   }
 }
