@@ -225,6 +225,7 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
       $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      unset($form['submit']);
       unset($form['delete']);
     }
     // edit node
