@@ -6,7 +6,7 @@
  */
 function content_lock_install() {
   drupal_install_schema('content_lock');
-  }
+}
 
 /**
  * Implementation of hook_uninstall().
@@ -39,14 +39,6 @@ function content_lock_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
-      'persistent' => array(
-        'description' => 'Persistent locking.',
-        'type' => 'int',
-        'size' => 'tiny',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0,
-      ),
       'timestamp' => array(
         'description' => 'Time the lock occured.',
         'size' => 'normal',
@@ -63,70 +55,3 @@ function content_lock_schema() {
   );
   return $schema;
 }
-
-/**
- * Helper function to add a permission to a role.
- */
-function _content_lock_add_permission($rid, $permission) {
-  if ($permission) {
-    $current_perm = db_result(db_query("SELECT perm FROM {permission} WHERE rid = %d", $rid));
-    if ($current_perm != '') {
-      $current_perm .= ', ';
-    }
-    $current_perm .= $permission;
-    db_query("UPDATE {permission} SET perm = '%s' WHERE rid = %d", $current_perm, $rid);
-  }
-}
-
-/**
- * Update schema from Drupal 4.7.x to 5.x.
- */
-function content_lock_update_1() {
-  $ret = array();
-  db_change_field($ret, 'content_lock', 'checkedout', 'persistent',
-    array(
-      'description' => 'Persistent locking.',
-      'type' => 'int',
-      'size' => 'tiny',
-      'unsigned' => TRUE,
-      'not null' => TRUE,
-      'default' => 0,
-    )
-  );
-  db_change_field($ret, 'content_lock', 'checkedout', 'persistent',
-    array(
-      'description' => 'Time the lock occured.',
-      'size' => 'normal',
-      'type' => 'int',
-      'unsigned' => TRUE,
-      'not null' => TRUE,
-      'default' => 0,
-    )
-  );
-
-  db_add_index($ret, 'content_lock', 'user', array('uid'));
-  return $ret;
-}
-
-/**
- * Move the persistent check-out setting to the permissions table.
- */
-function content_lock_update_2() {
-  $ret = array();
-
-  // When persistent check-out was enabled, add a permission to every role
-  // that has the "check out documents" permission.
-  if (variable_get('content_lockt_long', 0)) {
-    foreach (user_roles(0, 'check out documents') as $rid => $role) {
-      _content_lock_add_permission($rid, 'keep documents checked out');
-    }
-  }
-  variable_del('content_lock_long');
-
-  $ret[] = array(
-    'query' => 'The access permissions have been updated by the content_lock module.',
-    'success' => TRUE
-  );
-  return $ret;
-}
-

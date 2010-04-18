@@ -115,33 +115,28 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
         }
         else {
           // Node is not locked. Try to re-lock if node is unchanged.
-          if (node_last_changed($node->nid) > $node->changed || !content_lockt_node($node->nid, $user->uid)) {
+          if (node_last_changed($node->nid) > $node->changed || !content_lock_node($node->nid, $user->uid)) {
             form_set_error('alsochanged', t('Your lock has been removed due to inactivity or by an administrator. Failed to regain the lock since the document has been changed since.'));
           }
         }
       }
       break;
-    case 'insert':
     case 'update':
-      if (!empty($node->content_lock)) {
-        content_lock_persistent($node->nid);
-      }
-      else if ($op == 'update') {
-        content_lock_release($node->nid, $user->uid, TRUE);
-      }
+        content_lock_release($node->nid, $user->uid);
       break;
-
     case 'delete':
-      content_lock_release($node->nid, NULL, TRUE);
+      content_lock_release($node->nid, NULL);
       break;
-
     case 'view':
       global $user;
       if(!$messages_shown) {
         _content_lock_show_warnings();
         $messages_shown = true;
       }
-      content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
+
+      if($node->build_mode != NODE_BUILD_PREVIEW) {
+        content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
+      }
       break;
   }
 }
@@ -151,10 +146,10 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
  */
 function content_lock_form_alter(&$form, $form_state, $form_id) {
   global $user;
-  _content_lock_add_nodeadministration(&$form, $form_state, $form_id);
+  _content_lock_add_nodeadministration($form, $form_state, $form_id);
 
   if(variable_get('content_lock_admin_cancelbutton', true)) {
-    _content_lock_add_cancelbutton(&$form, $form_state, $form_id);
+    _content_lock_add_cancelbutton($form, $form_state, $form_id);
   }
   // this form are blacklisten, so nodes of this type never get locked
   $node_type_blacklist = array(
@@ -203,31 +198,6 @@ function _content_lock_verbose() {
 function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
   $form['buttons']['#prefix'] = "<div class='buttons-wrapper'>";
   $form['buttons']['#suffix'] = "</div>";
-  if (isset($form['type']) && $form['type']['#value'] .'_node_form' == $form_id) {
-    if (user_access('check out documents') && user_access('keep documents checked out')) {
-      $form['content_lock'] = array(
-          '#type' => 'checkbox',
-          '#title' => t('Keep document locked'),
-          '#return_value' => 1,
-          '#weight' => 21, // Place immediately after log message.
-          '#default_value' => FALSE,
-          '#description' => t('Check this box if you want to keep this document locked in your name after submitting it.'),
-      );
-    }
-  }
-  else if ($form_id == 'node_configure') {
-    // Make sure our element appears before the submit buttons.
-    $form['buttons']['#weight'] = 10;
-
-    $period = array(0 => t('Disabled')) + drupal_map_assoc(array(3600, 10800, 21600, 32400, 43200, 86400, 172800, 259200, 604800, 1209600, 2419200, 4838400, 9676800), 'format_interval');
-    $form['content_lock_clear'] = array(
-        '#type' => 'select',
-        '#title' => t('Automatic check-in'),
-        '#default_value' => variable_get('content_lock_clear', 0),
-        '#options' => $period,
-        '#description' => t('The period after which locked documents will be automatically released.'),
-    );
-  }
 }
 
 function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
@@ -254,12 +224,15 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
       unset($form['delete']);
     }
     // edit node
-    else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') && ( is_numeric(arg(1)) )){
+    else if($form['#id'] == 'node-form'){
       $node = $form['#node'];
 
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
       $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      if(isset($form['buttons']['delete'])) {
+        $form['buttons']['delete']['#weight'] = 2001;
+      }
     }
     // add node
     else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') ){
@@ -352,8 +325,6 @@ function content_lock_node($nid, $uid) {
   if ($lock = content_lock_fetch_lock($nid)) {
     // Node is already locked.
     // Deny editing this node even if the node is locked by the same user.
-    // The only exception to this rule is when the user had previously acquired
-    // a persistent lock.
     if ($lock->uid != $uid) {
       $message = content_lock_lock_owner($lock);
 
@@ -370,7 +341,6 @@ function content_lock_node($nid, $uid) {
       drupal_set_message($message, 'error');
       return FALSE;
     }
-
   }
   else {
     // Lock node.
@@ -392,45 +362,21 @@ function content_lock_node($nid, $uid) {
 }
 
 /**
- * Set a persistent document lock.
- *
- * @param $nid
- *   The node id to lock persistently.
- */
-function content_lock_persistent($nid) {
-  $data = array(
-    'presistent' => 1,
-  );
-  $key = array(
-    'nid' => $nid,
-  );
-  drupal_write_record(
-    'content_lock',
-    $data,
-    $key
-  );
-}
-
-/**
  * Release a locked node.
  *
  * @param $nid
  *   The node id to release the edit lock for.
  * @param $uid
  *   If set, verify that a lock belongs to this user prior to release.
- * @param $break
- *   Break persistent locks.
  */
-function content_lock_release($nid, $uid = NULL, $break = FALSE) {
+function content_lock_release($nid, $uid = NULL) {
   $add_sql = '';
   $args = array($nid);
   if (isset($uid)) {
     $add_sql = " AND uid = %d";
     $args[] = $uid;
   }
-  if ($break || !db_result(db_query_range("SELECT persistent FROM {content_lock} WHERE nid = %d". $add_sql, $args, 0, 1))) {
-    db_query("DELETE FROM {content_lock} WHERE nid = %d". $add_sql, $args);
-  }
+  db_query("DELETE FROM {content_lock} WHERE nid = %d". $add_sql, $args);
 }
 
 /**
@@ -449,7 +395,6 @@ function content_lock_overview($account = NULL) {
     $uid = $account->uid;
   }
   $header[] = array('data' => t('Locked since'), 'field' => 'c.timestamp');
-  $header[] = array('data' => t('Persistent lock'), 'field' => 'c.persistent');
   $header[] = t('Operations');
 
   $rows = array();
@@ -464,8 +409,7 @@ function content_lock_overview($account = NULL) {
       $row[] = theme('username', user_load(array('uid' => $data->uid)));
     }
     $row[] = format_date($data->timestamp, 'small');
-    $row[] = $data->persistent ? t('yes') : '&mdash;';
-    $row[] = l(t('check in'), "$url/$data->nid");
+    $row[] = l(t('release lock'), "$url/$data->nid");
     $rows[] = $row;
   }
 
@@ -491,11 +435,11 @@ function content_lock_overview($account = NULL) {
  *   This function will execute a redirect and doesn't return.
  */
 function content_lock_release_item($nid, $account = NULL) {
-  content_lock_release($nid, $account ? $account->uid : NULL, TRUE);
+  content_lock_release($nid, $account ? $account->uid : NULL);
   if(_content_lock_verbose()) {
     drupal_set_message(t('The editing lock has been released.'));
   }
-  drupal_goto($account ? "user/$account->uid/content_lock" : 'admin/content/node/content_lock');
+  drupal_goto($account ? "user/{$account->uid}/content_lock" : 'admin/content/node/content_lock');
 }
 
 /**
@@ -526,7 +470,7 @@ function content_lock_warn_pending_locks($uid) {
   foreach($warned_nodes[$uid] as $lock) {
     $editlink = l(t('edit'),"node/{$lock->nid}/edit");
     $unlocklinkhere = l(t('here'),"admin/content/{$lock->nid}/content_lock/releaseown");
-    _content_lock_save_lock_warning(t("You are currently blocking the node '!nodetitle' against edits. You might want this by clicking !unlocklinkhere, or !edit the node", array ('!nodetitle' => $lock->title, '!edit' => $editlink, '!unlocklinkhere' => $unlocklinkhere)),$lock->nid);
+    _content_lock_save_lock_warning(t("You are currently blocking the node '!nodetitle' against edits. You might want to do this by clicking !unlocklinkhere, or !edit the node", array ('!nodetitle' => $lock->title, '!edit' => $editlink, '!unlocklinkhere' => $unlocklinkhere)),$lock->nid);
   }
   $content_lock_messages_printed = true;
 }
@@ -578,7 +522,7 @@ function content_lock_release_own_item($nid, $response = true) {
   global $user;
 
   if($nid != NULL) {
-    content_lock_release($nid,$user->uid,true);
+    content_lock_release($nid,$user->uid);
    // drupal_get_messages();
     if($response) {
       drupal_goto("node/$nid");
