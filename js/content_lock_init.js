@@ -19,7 +19,7 @@
     $().onUserExit( {
       execute: content_lock_onleave,
       executeConfirm: content_lock_confirm,
-      internalURLs: 'canceledit|trash/confirm'
+      internalURLs: 'canceledit|trash/confirm|edit'
     });
   });
 })(jQuery);
