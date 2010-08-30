@@ -158,6 +158,30 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
   $node = $form['#node'];
   $nid = $form['nid']['#value'];
 
+  /* **************** Restore the node format ****************************** */
+  // _content_lock_is_lockable_node() needs to know the original
+  // node format. We either dig up a stashed content_lock_old_format or
+  // initialize it here.
+  // Only touch node edit forms:
+  if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id) {
+      $old_format = $node->format;
+      if (!empty($node->content_lock_old_format)) {
+	$old_format = $node->content_lock_old_format;
+      }
+      if (!empty($form_state['values']['content_lock_old_format'])) {
+	$old_format = $form_state['values']['content_lock_old_format'];
+      }
+      // Needs to be manually set before first form submission.
+      // We set this in the $node-> namespace because content_lock_nodeapi()
+      // doesn't see $form_state['values'].
+      $node->content_lock_old_format = $old_format;
+
+      $form['content_lock_old_format'] = array(
+        '#type' => 'hidden',
+        '#value' => $node->content_lock_old_format,
+      );
+  }
+
   /** ******************* General preconditions for locking ***************** */
   // Veto-API. Let other modules veto the locking - so force skiping out of any conditions they want
   // We will use | logic, so if any module denies locking - we deny
@@ -166,7 +190,7 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
   $result = module_invoke_all('content_lock_skip_locking', $node, $form_id, $form, $form_state);
   foreach($result as $bool) {
     if (is_bool($bool)) {
-      $skip_lock = $skip_lock | $bool;
+      $skip_lock = $skip_lock || $bool;
     }
   }
 
@@ -205,7 +229,7 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
 /* 
  *  Implementation of our own skip_locking api to implement our logic to skip locks
  */
-function content_lock_content_lock_skip_locking($node,$form_id, $form, $form_state) {
+function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_state) {
   global $user;
   $nid = $form['nid']['#value'];
   // Locked node types. Dont mix this up with the content_types you can chose on the admin form of content lock
@@ -224,35 +248,21 @@ function content_lock_content_lock_skip_locking($node,$form_id, $form, $form_sta
   }
   // Let other modules modify our blacklist
   drupal_alter('content_lock_form_id_blacklist', $form_id_blacklist, $node);
-  if($node_type_blacklist[$node->type] === TRUE  // If this node is blacklisted, dont lock.
-      || $form_id_blacklist[$form_id] === TRUE    // If this form is blacklisted, dont lock.
+  if($node_type_blacklist[$node->type] === TRUE   // If this node is blacklisted, don't lock.
+      || $form_id_blacklist[$form_id] === TRUE    // If this form is blacklisted, don't lock.
       || $user->uid <= 0                          // A valid user is needed for locking
       || !user_access('check out documents')      // The user must have this permission to be able to lock.
       || $node == NULL                            // If we somehow have no node, no need to lock at all
+      || $form_id != $node->type . '_node_form'   // See node_forms(). Don't lock custom forms just because
+                                                  //   they have $form['nid'] and $form['#node'].
       || empty($nid)
   ) {
     // Preconditions failed, skip the lock
     return TRUE;
   }
   
-  /* **************** Restore the node format ****************************** */
-  // _content_lock_is_lockable_node() needs to know the original
-  // node format. 
-  // TODO: this stuff pretty sure on the wrong place here. On preview + no validation errors this should break
-  // due to form rebuild and missing values in $form_state['values'] .. only $form['#node'] is preserved in this case
-  $old_format = $node->format;
-  if (!empty($form_state['values']['content_lock_old_format'])) {
-    $old_format = $form_state['values']['content_lock_old_format'];
-  }
-  $form['content_lock_old_format'] = array(
-    '#type' => 'hidden',
-    '#value' => $old_format,
-  );
-  // Needs to be manually set before first form submission.
-  // We set this in the $node-> namespace because content_lock_nodeapi()
-  // doesn't see $form_state['values'].
-  $node->content_lock_old_format = $old_format;
   // Check if the current node type and format type is configured to be locked
+  // $node->content_lock_old_format has been set in content_lock_form_alter().
   if (!_content_lock_is_lockable_node($node)) {
     // It should not be locked, so skip the lock
     return TRUE;
@@ -400,11 +410,12 @@ function content_lock_node($nid, $uid) {
         'content_lock',
         $data
       );
+
+      if(_content_lock_verbose()) {
+	drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+      }
+      module_invoke_all('content_lock_locked', $nid, $uid);
     }
-    if(_content_lock_verbose()) {
-      drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
-    }
-    module_invoke_all('content_lock_locked', $nid, $uid);
   }
 
   return TRUE;
