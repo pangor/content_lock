@@ -20,13 +20,6 @@ Bug reports, feature suggestions and latest developments:
   http://drupal.org/project/issues/content_lock
 
 
--- REQUIREMENTS --
-
-Working cron, if you wish to make use of automated check-ins.  If your hoster
-doesn't allow you to access cron take a look at Poormanscron
-(http://drupal.org/project/poormanscron).
-
-
 -- INSTALLATION --
 
 1. Install as usual, see http://drupal.org/node/70151 for further information.
@@ -48,12 +41,19 @@ doesn't allow you to access cron take a look at Poormanscron
      own content locks on their profile page.
 
 3. Configure the module at Content management >> Post settings.
-   Currently, the only configurable setting is the automatic check-in time span.
 
+   Show lock / unlock message - Make content_lock more verbose, informing a
+     user when he locks a node and about his inconsideration when he visits
+     one node while he has kept another node locked.
+
+   Add cancel button - Adds a link in a node's edit form to cancel the edit,
+     letting the user intentionally navigate away from the Edit page without
+     being asked for confirmation by a javascript dialog.
 
 -- CREDITS --
 Current authors:
 Eugen Mayer http://drupal.org/user/108406
+Nathan Phillip Brink http://drupal.org/user/108406
 
 
 Original authors:

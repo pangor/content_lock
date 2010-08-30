@@ -71,57 +71,29 @@ function content_lock_menu() {
     'access arguments' => array('check out documents'),
     'type' => MENU_CALLBACK
   );
+  $items['node/%/canceledit'] = array (
+        'page callback' => 'content_lock_release_own_item',
+        'page arguments' => array(1),
+        'access callback' => true
+  );
+
+  $items['ajax/content_lock/%/canceledit'] = array (
+        'page callback' => 'content_lock_release_own_item',
+        'page arguments' => array(2,false),
+        'access callback' => true
+  );
+
+  $items['admin/settings/content_lock'] = array (
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Content lock',
+    'description' => 'Configuration options for the Content lock module',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('content_lock_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'content_lock.admin.inc'
+   );
 
   return $items;
-}
-
-/**
- * Implementation of hook_form_alter().
- */
-function content_lock_form_alter(&$form, $form_state, $form_id) {
-  if (isset($form['type']) && $form['type']['#value'] .'_node_form' == $form_id) {
-    if (user_access('check out documents') && user_access('keep documents checked out')) {
-      $form['content_lock'] = array(
-        '#type' => 'checkbox',
-        '#title' => t('Keep document locked'),
-        '#return_value' => 1,
-        '#weight' => 21, // Place immediately after log message.
-        '#default_value' => FALSE,
-        '#description' => t('Check this box if you want to keep this document locked in your name after submitting it.'),
-      );
-    }
-  }
-  else if ($form_id == 'node_configure') {
-    // Make sure our element appears before the submit buttons.
-    $form['buttons']['#weight'] = 10;
-
-    $period = array(0 => t('Disabled')) + drupal_map_assoc(array(3600, 10800, 21600, 32400, 43200, 86400, 172800, 259200, 604800, 1209600, 2419200, 4838400, 9676800), 'format_interval');
-    $form['content_lock_clear'] = array(
-      '#type' => 'select',
-      '#title' => t('Automatic check-in'),
-      '#default_value' => variable_get('content_lock_clear', 0),
-      '#options' => $period,
-      '#description' => t('The period after which locked documents will be automatically released.'),
-    );
-  }
-
-  global $user;
-  // we are not allowed to lock on users form edit, as it always returns to the edit form..
-  $node_type_blacklist = array("user" => true);
-  $node = $form['#node'];
-  if(!$user->uid || !user_access('check out documents') || $node == NULL || $node_type_blacklist[$node->type] || $node->type."_node_form" != $form_id) {
-    // we are not editing a node, so we dont need all this options. lets cancel
-    return $form;
-  }
-  $nid = $form['nid']['#value'];
-
-  if($form_state['submitted'] === false && $nid != "" && $form_id != "comment_form") {
-    /// node editing starts and we are editing a node and not adding a comment
-    // current nid
-    if(content_lock_node($nid, $user->uid) == false) {// could not lock node, its locked by someone else
-      drupal_goto("node/$nid");
-    }
-  }
 }
 
 /**
@@ -129,10 +101,11 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
  */
 function content_lock_nodeapi(&$node, $op, $teaser, $page) {
   global $user;
+  static $messages_shown = false;
 
   switch ($op) {
     case 'validate':
-      if (isset($node->nid) && user_access('check out documents')) {
+      if (isset($node->nid) && _content_lock_is_lockable_node($node) && user_access('check out documents')) {
         // Existing node. Check if we still own the lock.
         if ($lock = content_lock_fetch_lock($node->nid)) {
           if ($lock->uid != $user->uid) {
@@ -142,70 +115,214 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
         }
         else {
           // Node is not locked. Try to re-lock if node is unchanged.
-          if (node_last_changed($node->nid) > $node->changed || !content_lockt_node($node->nid, $user->uid)) {
+          if (node_last_changed($node->nid) > $node->changed || !content_lock_node($node->nid, $user->uid)) {
             form_set_error('alsochanged', t('Your lock has been removed due to inactivity or by an administrator. Failed to regain the lock since the document has been changed since.'));
           }
         }
       }
       break;
-
-    case 'insert':
     case 'update':
-      if (!empty($node->content_lock)) {
-        content_lock_persistent($node->nid);
-      }
-      else if ($op == 'update') {
-        content_lock_release($node->nid, $user->uid, TRUE);
+      if (_content_lock_is_lockable_node($node)) {
+        content_lock_release($node->nid, $user->uid);
       }
       break;
-
     case 'delete':
-      content_lock_release($node->nid, NULL, TRUE);
+      if (_content_lock_is_lockable_node($node)) {
+        content_lock_release($node->nid, NULL);
+      }
       break;
-
     case 'view':
       global $user;
-      content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
+
+      if (!_content_lock_is_lockable_node($node)) {
+        break;
+      }
+
+      if(!$messages_shown) {
+        _content_lock_show_warnings();
+        $messages_shown = true;
+      }
+
+      if($node->build_mode != NODE_BUILD_PREVIEW) {
+        content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
+      }
       break;
   }
 }
 
 /**
- * Implementation of hook_cron().
- *
- * Release nodes that have been locked longer than the configured period.
+ * Implementation of hook_form_alter().
  */
-function content_lock_cron() {
-  $content_lock_clear = variable_get('content_lock_clear', 0);
-  if ($content_lock_clear > 0) {
-    $result = db_query('DELETE FROM {content_lock} WHERE timestamp < %d', time() - $content_lock_clear);
-    if ($num = db_affected_rows($result)) {
-      $period = format_interval($content_lock_clear);
-      drupal_set_message(format_plural($num, 'Released one document locked for more than @period.', 'Released @count documents locked for more than @period.', array('@period' => $period)));
-      watchdog('content_lock', 'Released @count document(s) locked for more than @period.', array('@count' => $num, '@period' => $period));
+function content_lock_form_alter(&$form, $form_state, $form_id) {
+  global $user;
+  $node = $form['#node'];
+  $nid = $form['nid']['#value'];
+
+  /** ******************* General preconditions for locking ***************** */
+  // Veto-API. Let other modules veto the locking - so force skiping out of any conditions they want
+  // We will use | logic, so if any module denies locking - we deny
+  // Be sure to noticte that content_lock also implements this api for his own vetos!
+  $skip_lock = FALSE; // no veto yet
+  $result = module_invoke_all('content_lock_skip_locking', $node, $form_id, $form, $form_state);
+  foreach($result as $bool) {
+    if (is_bool($bool)) {
+      $skip_lock = $skip_lock | $bool;
     }
+  }
+
+  if ($skip_lock == FALSE) {
+      // if we should lock or already have been locked, load the unload js. Dont use
+      // form alter but rather after build, so it works even for previews
+      if(variable_get('content_lock_unload_js', true)) {
+        $form['#after_build'][] = '_content_lock_add_unload_js';
+      }
+
+      // Add some minor things to the form
+      _content_lock_add_nodeadministration($form, $form_state, $form_id);
+      // Adding cancel button, if configured
+      if(variable_get('content_lock_admin_cancelbutton', true)) {
+        _content_lock_add_cancelbutton($form, $form_state, $form_id);
+      }
+      // If we are handling a preview, skip locking
+      if($form_state['rebuild'] == TRUE) {
+        // We dont need anything here right now
+      }
+      // If the form did not get submitted we show it the first time
+      // so try to get the lock if possible
+      else if ($form_state['submitted'] === FALSE) {
+        // Finally set the lock if everthing passed.
+        if(content_lock_node($nid, $user->uid) == false) {
+          // could not lock node, its locked by someone else
+          drupal_goto("node/$nid");
+        }
+      }
+      // else if($form_state['submitted'] === TRUE)
+      // if it is a submission, we would not need to lock once again, as we had before.
+      // as nodeapi insert/update are not called on preview, the node should stay locked until saved or canceled.  
   }
 }
 
-/**
- * Extract the node id from a node edit path.
- *
- * @param $path
- *   The path to match.
- * @return
- *   The node id extracted from the path.
+/* 
+ *  Implementation of our own skip_locking api to implement our logic to skip locks
  */
-function content_lock_get_nid($path) {
-  static $regexp;
+function content_lock_content_lock_skip_locking($node,$form_id, $form, $form_state) {
+  global $user;
+  $nid = $form['nid']['#value'];
+  // Locked node types. Dont mix this up with the content_types you can chose on the admin form of content lock
+  // this types are forced due to disfunctionality
+  $node_type_blacklist = array(
+    'user' => TRUE   // we are not allowed to lock on users form edit, as it always returns to the edit form..
+  );
+  
+  // Form ids listed here will not be locked
+  $form_id_blacklist = array( 
+    'comment_form' => TRUE,    // dont lock on comment forms
+  );
 
-  if (!isset($regexp)) {
-    $patterns = variable_get('content_lock_edit_paths', "edit\nrevisions\nrevisions/*\noutline\nclassify");
-    $regexp = '@^node/(\d+)/(?:'. preg_replace(array('/(\r\n?|\n)/', '/\\\\\*/'), array('|', '.*'), preg_quote($patterns, '@')) .')$@';
+  if($node != NULL) {
+   $form_id_blacklist['node_type_form'] = TRUE;  // add the node-type administration
   }
-  if (preg_match($regexp, $path, $match)) {
-    return $match[1];
+  // Let other modules modify our blacklist
+  drupal_alter('content_lock_form_id_blacklist', $form_id_blacklist, $node);
+  if($node_type_blacklist[$node->type] === TRUE  // If this node is blacklisted, dont lock.
+      || $form_id_blacklist[$form_id] === TRUE    // If this form is blacklisted, dont lock.
+      || $user->uid <= 0                          // A valid user is needed for locking
+      || !user_access('check out documents')      // The user must have this permission to be able to lock.
+      || $node == NULL                            // If we somehow have no node, no need to lock at all
+      || empty($nid)
+  ) {
+    // Preconditions failed, skip the lock
+    return TRUE;
   }
+  
+  /* **************** Restore the node format ****************************** */
+  // _content_lock_is_lockable_node() needs to know the original
+  // node format. 
+  // TODO: this stuff pretty sure on the wrong place here. On preview + no validation errors this should break
+  // due to form rebuild and missing values in $form_state['values'] .. only $form['#node'] is preserved in this case
+  $old_format = $node->format;
+  if (!empty($form_state['values']['content_lock_old_format'])) {
+    $old_format = $form_state['values']['content_lock_old_format'];
+  }
+  $form['content_lock_old_format'] = array(
+    '#type' => 'hidden',
+    '#value' => $old_format,
+  );
+  // Needs to be manually set before first form submission.
+  // We set this in the $node-> namespace because content_lock_nodeapi()
+  // doesn't see $form_state['values'].
+  $node->content_lock_old_format = $old_format;
+  // Check if the current node type and format type is configured to be locked
+  if (!_content_lock_is_lockable_node($node)) {
+    // It should not be locked, so skip the lock
+    return TRUE;
+  }
+  
+  // we have no veto, so lock the node
   return FALSE;
+}
+
+function _content_lock_add_unload_js(&$form,$form_state) {
+  $m = drupal_get_path('module','content_lock');
+  drupal_add_js("$m/js/jquery.url.packed.js",'module');
+  drupal_add_js("$m/js/onUserExit.js",'module');
+  drupal_add_js("$m/js/content_lock_init.js",'module');
+  drupal_add_js(array('content_lock' => array('nid' => $form['#node']->nid)), 'setting');
+  return $form;
+}
+
+function _content_lock_verbose() {
+  return variable_get('content_lock_admin_verbose', true);
+}
+
+function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
+  $form['buttons']['#prefix'] = "<div class='buttons-wrapper'>";
+  $form['buttons']['#suffix'] = "</div>";
+}
+
+function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
+  if (isset($form['#id'])) {
+    if( $form['#id'] == 'comment-form' ) {
+      $node = $form['#node'];
+      $form['cancel']['#type'] = 'markup';
+      $form['cancel']['#weight'] = 2000;
+      $form['cancel']['#value'] = l(t('Cancel'), 'node/' . $form['nid']['#value']."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+    }
+    else if( $form['#id'] == 'user-profile-form' ) {
+      $form['buttons'] = array('#weight' => 20000);
+      $form['buttons']['submit'] = $form['submit'];
+	    $form['buttons']['submit']['#weight'] = -5;
+      if(isset($form['delete'])) {
+        $form['buttons']['delbtn'] = $form['delete'];
+        $form['buttons']['delbtn']['#weight'] = -4;
+      }
+
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      unset($form['submit']);
+      unset($form['delete']);
+    }
+    // edit node
+    else if($form['#id'] == 'node-form'){
+      $node = $form['#node'];
+
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      if(isset($form['buttons']['delete'])) {
+        $form['buttons']['delete']['#weight'] = 2001;
+      }
+    }
+    // add node
+    else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') ){
+      $node = $form['#node'];
+
+      $form['buttons']['cancel']['#type'] = 'markup';
+      $form['buttons']['cancel']['#weight'] = 2000;
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), '', array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+    }
+  }
 }
 
 /**
@@ -234,6 +351,15 @@ function content_lock_lock_owner($lock) {
   return t('This document is locked for editing by !name since @date.', array('!name' => $username, '@date' => $date));
 }
 
+function content_lock_user($op, $edit, $account) {
+  switch($op) {
+    case 'logout':
+      // removing all locks, as the user logs out
+      _content_lock_release_all_user_locks($account->uid);
+    break;
+  }
+}
+
 /**
  * Try to lock a document for editing.
  *
@@ -245,48 +371,43 @@ function content_lock_lock_owner($lock) {
  *   FALSE, if a document has already been locked by someone else.
  */
 function content_lock_node($nid, $uid) {
-  if ($lock = content_lock_fetch_lock($nid)) {
-    // Node is already locked.
-    // Deny editing this node even if the node is locked by the same user.
-    // The only exception to this rule is when the user had previously acquired
-    // a persistent lock.
-
-
-    if ($lock->uid != $uid) {
+  $lock = content_lock_fetch_lock($nid);
+  
+  if ($lock != FALSE && $lock->uid != $uid) {
+    if (user_access('administer checked out documents')) {
       $message = content_lock_lock_owner($lock);
-
-      if ($lock->uid == $uid) {
-        $url = "user/$uid/content_lock/release/$nid";
-      }
-      else if (user_access('administer checked out documents')) {
-        $url = "admin/content/node/content_lock/release/$nid";
-      }
-      if (isset($url)) {
-        $message .= '<br />'. t('Click <a href="!release-url">here</a> to check back in now.', array('!release-url' => url($url, array('query' => 'destination='. $_GET['q']))));
-      }
-
-      drupal_set_message($message, 'error');
-      return FALSE;
+      $url = "admin/content/node/content_lock/release/$nid";
     }
-
+    
+    if (isset($url)) {
+      $message .= '<br />'. t('Click <a href="!release-url">here</a> to check back in now.', array('!release-url' => url($url, array('query' => 'destination='. $_GET['q']))));
+    }
+    if(!empty($message)) {
+      drupal_set_message($message, 'error');
+    }
+    return FALSE;
   }
   else {
-    // Lock node.
-    db_query("INSERT INTO {content_lock} (nid, uid, timestamp) VALUES (%d, %d, %d)", $nid, $uid, time());
-    drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+    // no lock yet, create one
+    if($lock == false) {
+      // Lock node.
+      $data = array(
+        'nid' => $nid,
+        'uid' => $uid,
+        'timestamp' => time()
+      );
+      drupal_write_record(
+        'content_lock',
+        $data
+      );
+    }
+    if(_content_lock_verbose()) {
+      drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+    }
+    module_invoke_all('content_lock_locked', $nid, $uid);
   }
 
   return TRUE;
-}
-
-/**
- * Set a persistent document lock.
- *
- * @param $nid
- *   The node id to lock persistently.
- */
-function content_lock_persistent($nid) {
-  db_query("UPDATE {content_lock} SET persistent = 1 WHERE nid = %d", $nid);
 }
 
 /**
@@ -296,19 +417,20 @@ function content_lock_persistent($nid) {
  *   The node id to release the edit lock for.
  * @param $uid
  *   If set, verify that a lock belongs to this user prior to release.
- * @param $break
- *   Break persistent locks.
  */
-function content_lock_release($nid, $uid = NULL, $break = FALSE) {
+function content_lock_release($nid, $uid = NULL) {
   $add_sql = '';
   $args = array($nid);
   if (isset($uid)) {
     $add_sql = " AND uid = %d";
     $args[] = $uid;
   }
-  if ($break || !db_result(db_query_range("SELECT persistent FROM {content_lock} WHERE nid = %d". $add_sql, $args, 0, 1))) {
-    db_query("DELETE FROM {content_lock} WHERE nid = %d". $add_sql, $args);
-  }
+  db_query("DELETE FROM {content_lock} WHERE nid = %d". $add_sql, $args);
+  module_invoke_all('content_lock_released', $nid);
+}
+
+function _content_lock_release_all_user_locks($uid) {
+  db_query("DELETE FROM {content_lock} WHERE uid = %d", $uid);
 }
 
 /**
@@ -327,7 +449,6 @@ function content_lock_overview($account = NULL) {
     $uid = $account->uid;
   }
   $header[] = array('data' => t('Locked since'), 'field' => 'c.timestamp');
-  $header[] = array('data' => t('Persistent lock'), 'field' => 'c.persistent');
   $header[] = t('Operations');
 
   $rows = array();
@@ -342,8 +463,7 @@ function content_lock_overview($account = NULL) {
       $row[] = theme('username', user_load(array('uid' => $data->uid)));
     }
     $row[] = format_date($data->timestamp, 'small');
-    $row[] = $data->persistent ? t('yes') : '&mdash;';
-    $row[] = l(t('check in'), "$url/$data->nid");
+    $row[] = l(t('release lock'), "$url/$data->nid");
     $rows[] = $row;
   }
 
@@ -369,9 +489,11 @@ function content_lock_overview($account = NULL) {
  *   This function will execute a redirect and doesn't return.
  */
 function content_lock_release_item($nid, $account = NULL) {
-  content_lock_release($nid, $account ? $account->uid : NULL, TRUE);
-  drupal_set_message(t('The editing lock has been released.'));
-  drupal_goto($account ? "user/$account->uid/content_lock" : 'admin/content/node/content_lock');
+  content_lock_release($nid, $account ? $account->uid : NULL);
+  if(_content_lock_verbose()) {
+    drupal_set_message(t('The editing lock has been released.'));
+  }
+  drupal_goto($account ? "user/{$account->uid}/content_lock" : 'admin/content/node/content_lock');
 }
 
 /**
@@ -379,31 +501,134 @@ function content_lock_release_item($nid, $account = NULL) {
  * with an link to release this node.
  *
  */
-
 function content_lock_warn_pending_locks($uid) {
   // cache
-  global $warned_nodes;
-  $result = db_query("SELECT * FROM {content_lock} WHERE uid = %d", $uid);
-  while($lock = db_fetch_object($result)) {
-    // we have warned this one already, lets pass
-    $node = node_load($lock->nid);
-    $unlocklink = "/admin/content/$node->nid/content_lock/releaseown";    //
-    drupal_set_message(t("You are currently locking the node '!nodetitle' and therefore nobody can edit it anymore. You might want to <a href='!unlocklink'>unlock</a> this node, click <a href='!unlocklink'>here</a> to do so", array ('!nodetitle' => $node->title, '!unlocklink' => $unlocklink)),"error", false);
+  static $warned_nodes = array();
+  static $content_lock_messages_printed = false;
+  if($content_lock_messages_printed) {
+    return;
   }
+
+  if(array_key_exists($uid,$warned_nodes)){
+    // do nothing
+  }
+  else {
+    // load form db
+    $warned_nodes[$uid] = array();
+    $result = db_query("SELECT cl.nid,n.title FROM {content_lock} as cl LEFT JOIN {node} as n on cl.nid=n.nid WHERE cl.uid = %d", $uid);
+    while($lock = db_fetch_object($result)) {
+      $warned_nodes[$uid][] = $lock;
+    }
+  }
+
+  foreach($warned_nodes[$uid] as $lock) {
+    $editlink = l(t('editing'),"node/{$lock->nid}/edit");
+    $unlocklinkhere = l(t('here'),"admin/content/{$lock->nid}/content_lock/releaseown");
+    _content_lock_save_lock_warning(t("You are currently preventing the node '!nodetitle' from being edited. You may want to let others edit this node by clicking !unlocklinkhere, or finish !edit the node.", array ('!nodetitle' => $lock->title, '!edit' => $editlink, '!unlocklinkhere' => $unlocklinkhere)),$lock->nid);
+  }
+  $content_lock_messages_printed = true;
 }
+
+function _content_lock_save_lock_warning($message, $nid) {
+  if(empty($_SESSION['content_lock'])) {
+    $_SESSION['content_lock'] = '';
+  }
+  $data = unserialize($_SESSION['content_lock']);
+  if(!is_array($data)) {
+    $data = array();
+  }
+
+  if(array_key_exists($nid,$data)) {
+    return;
+  }
+
+  $data[$nid] = $message;
+  $_SESSION['content_lock'] = serialize($data);
+}
+
+function _content_lock_show_warnings() {
+  global $user;
+  if(empty($_SESSION['content_lock'])) {
+    return;
+  }
+  $data = unserialize($_SESSION['content_lock']);
+  if(!is_array($data) || count($data) == 0) {
+    return;
+  }
+  foreach($data as $nid => $messsage) {
+    if(_content_lock_still_locked($user->uid,$nid) > 0){
+      drupal_set_message($messsage,'warning');
+    }
+  }
+  $_SESSION['content_lock'] = '';
+}
+
+function _content_lock_still_locked($uid,$nid) {
+  $result = db_result(db_query("SELECT count(cl.nid) FROM {content_lock} as cl  WHERE cl.uid = %d AND cl.nid=%d", $uid,$nid));
+  return $result;
+}
+
 /**
  * Release the lock of a node. We are using the current users uid, so the user only can delete
  * his own locks. We never fail, as if the lock does not exist, the node is unlocked anyway
  */
-function content_lock_release_own_item($node) {
+function content_lock_release_own_item($nid, $response = true) {
   global $user;
 
-  if($node != NULL) {
-    content_lock_release($node,$user->uid,true);    //
-    drupal_set_message(t('Removed edit lock'));
-    drupal_goto("/node/$node");
+  if($nid != NULL) {
+    content_lock_release($nid,$user->uid);
+   // drupal_get_messages();
+    if($response) {
+      drupal_goto("node/$nid");
+    }
+    else {
+      exit();
+    }
   }
   else { // thats what we do, if a user was creating a node and canceled
-    drupal_goto("/");
+    if($response) {
+      drupal_goto();
+    }
+    else {
+      exit();
+    }
   }
+}
+
+/**
+ * Check whether a node is configured to be protected by content_lock.
+ */
+function _content_lock_is_lockable_node($node) {
+  static $lockable;
+
+  // To catch the case where the user is changing the input format,
+  // we store the original input format.
+  $format = $node->format;
+  if (!empty($node->content_lock_old_format)) {
+    $format = $node->content_lock_old_format;
+  }
+  // Check for a cache hit
+  if (isset($lockable[$format][$node->nid])) {
+    return $lockable[$format][$node->nid];
+  }
+
+  $types = array_filter(variable_get('content_lock_allowed_node_types', array()));
+  // Let other modules modify our blacklist
+  drupal_alter('content_lock_node_type_blacklist', $types, $node);
+  $formats = array_filter(variable_get('content_lock_allowed_formats', array()));
+  $lockable[$format][$node->nid] = FALSE;
+  // Determine if the node is of a lockable content type or text format.
+  if ((empty($types) || in_array($node->type, $types))
+      && (empty($formats) || in_array($format, $formats))) {
+    $lockable[$format][$node->nid] = TRUE;
+  }
+
+  return $lockable[$format][$node->nid];
+}
+
+function content_lock_views_api() {
+  return array(
+   'api' => 2.0,
+   'path' => drupal_get_path('module', 'content_lock') . '/views',
+  );
 }
