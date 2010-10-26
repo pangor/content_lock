@@ -3,7 +3,9 @@
   window.content_lock_onleave = function  () {
     var nid = Drupal.settings.content_lock.nid;
     var random = Math.random();
-    var aurl = "http:/ds.l"+Drupal.settings.basePath + 'index.php?q=ajax/content_lock/'+nid+'/canceledit&t='+random;
+    var protocol = $(location).attr('protocol');
+    var host  = $(location).attr('host');
+    var aurl = protocol+host+Drupal.settings.basePath + 'index.php?q=ajax/content_lock/'+nid+'/canceledit&t='+random;
     $.ajax({
       url:   aurl,
       async: false,

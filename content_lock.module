@@ -65,12 +65,6 @@ function content_lock_menu() {
     'weight' => 5,
     'type' => MENU_LOCAL_TASK
   );
-  $items['user/%user/content_lock/release'] = array(
-    'page callback' => 'content_lock_release_item',
-    'page arguments' => array(4, 1),
-    'access arguments' => array('check out documents'),
-    'type' => MENU_CALLBACK
-  );
   $items['node/%/canceledit'] = array (
         'page callback' => 'content_lock_release_own_item',
         'page arguments' => array(1),
@@ -155,8 +149,8 @@ function content_lock_nodeapi(&$node, $op, $teaser, $page) {
  */
 function content_lock_form_alter(&$form, $form_state, $form_id) {
   global $user;
-  $node = $form['#node'];
-  $nid = $form['nid']['#value'];
+  $node = empty($form['#node']) ? NULL : $form['#node'];
+  $nid = empty($form['nid']['#value']) ? NULL : $form['nid']['#value'];
 
   /* **************** Restore the node format ****************************** */
   // _content_lock_is_lockable_node() needs to know the original
@@ -208,7 +202,7 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
         _content_lock_add_cancelbutton($form, $form_state, $form_id);
       }
       // If we are handling a preview, skip locking
-      if($form_state['rebuild'] == TRUE) {
+      if(!empty($form_state['rebuild']) && $form_state['rebuild'] == TRUE) {
         // We dont need anything here right now
       }
       // If the form did not get submitted we show it the first time
@@ -231,7 +225,7 @@ function content_lock_form_alter(&$form, $form_state, $form_id) {
  */
 function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_state) {
   global $user;
-  $nid = $form['nid']['#value'];
+  $nid = empty($form['nid']['#value']) ? NULL : $form['nid']['#value'];
   // Locked node types. Dont mix this up with the content_types you can chose on the admin form of content lock
   // this types are forced due to disfunctionality
   $node_type_blacklist = array(
@@ -248,14 +242,14 @@ function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_st
   }
   // Let other modules modify our blacklist
   drupal_alter('content_lock_form_id_blacklist', $form_id_blacklist, $node);
-  if($node_type_blacklist[$node->type] === TRUE   // If this node is blacklisted, don't lock.
-      || $form_id_blacklist[$form_id] === TRUE    // If this form is blacklisted, don't lock.
+  if($node == NULL                                // If we somehow have no node, no need to lock at all
+      || empty($nid)
+      || !empty($node_type_blacklist[$node->type])// If this node is blacklisted, don't lock.
+      || !empty($form_id_blacklist[$form_id])     // If this form is blacklisted, don't lock.
       || $user->uid <= 0                          // A valid user is needed for locking
       || !user_access('check out documents')      // The user must have this permission to be able to lock.
-      || $node == NULL                            // If we somehow have no node, no need to lock at all
       || $form_id != $node->type . '_node_form'   // See node_forms(). Don't lock custom forms just because
                                                   //   they have $form['nid'] and $form['#node'].
-      || empty($nid)
   ) {
     // Preconditions failed, skip the lock
     return TRUE;
@@ -294,9 +288,9 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
   if (isset($form['#id'])) {
     if( $form['#id'] == 'comment-form' ) {
       $node = $form['#node'];
-      $form['cancel']['#type'] = 'markup';
+      $form['cancel']['#type'] = 'markup';      
       $form['cancel']['#weight'] = 2000;
-      $form['cancel']['#value'] = l(t('Cancel'), 'node/' . $form['nid']['#value']."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      $form['cancel']['#value'] = l(t('Cancel'), 'node/' . $form['nid']['#value']."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
     }
     else if( $form['#id'] == 'user-profile-form' ) {
       $form['buttons'] = array('#weight' => 20000);
@@ -309,7 +303,7 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
 
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
       unset($form['submit']);
       unset($form['delete']);
     }
@@ -319,7 +313,7 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
 
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
       if(isset($form['buttons']['delete'])) {
         $form['buttons']['delete']['#weight'] = 2001;
       }
@@ -330,7 +324,7 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
 
       $form['buttons']['cancel']['#type'] = 'markup';
       $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), '', array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel')));
+      $form['buttons']['cancel']['#value'] = l(t('Cancel'), '', array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
     }
   }
 }
@@ -377,10 +371,12 @@ function content_lock_user($op, $edit, $account) {
  *   A node id.
  * @param $uid
  *   The user id to lock the node for.
+ * @param $quiet
+ *   Suppress any normal user messages.
  * @return
  *   FALSE, if a document has already been locked by someone else.
  */
-function content_lock_node($nid, $uid, $quite = FALSE) {
+function content_lock_node($nid, $uid, $quiet = FALSE) {
   $lock = content_lock_fetch_lock($nid);
   
   if ($lock != FALSE && $lock->uid != $uid) {
@@ -411,7 +407,7 @@ function content_lock_node($nid, $uid, $quite = FALSE) {
         $data
       );
 
-      if(_content_lock_verbose() && !$quite) {
+      if(_content_lock_verbose() && !$quiet) {
         drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
       }
       module_invoke_all('content_lock_locked', $nid, $uid);
@@ -451,30 +447,38 @@ function _content_lock_release_all_user_locks($uid) {
  *   A user object.
  */
 function content_lock_overview($account = NULL) {
+  global $user;
+  // TODO: old checkout code, review
   $header = array(array('data' => t('Title'), 'field' => 'n.title', 'sort' => 'asc'));
+  // in the case of an admin, we dont have uid, as he sees all locks
   if (!$account) {
     $header[] = array('data' => t('Username'), 'field' => 'u.name');
     $uid = NULL;
   }
+  // otherwise we have the account of the user just beeing views as argument
   else {
     $uid = $account->uid;
   }
   $header[] = array('data' => t('Locked since'), 'field' => 'c.timestamp');
-  $header[] = t('Operations');
+  if($uid == $user->uid || user_access('administer checked out documents')) {
+    $header[] = t('Operations');
+  }
 
   $rows = array();
   $add_sql = $uid ? " WHERE c.uid = %d" : '';
   $result = pager_query('SELECT c.*, n.title, u.name FROM {content_lock} c INNER JOIN {node} n ON n.nid = c.nid INNER JOIN {users} u ON u.uid = c.uid'. $add_sql . tablesort_sql($header), 50, 0, NULL, $uid);
-  $url = $uid ? "user/$uid/content_lock/release" : 'admin/content/node/content_lock/release';
 
   while ($data = db_fetch_object($result)) {
+    $url = $uid ? "admin/content/".$data->nid."/content_lock/releaseown" : 'admin/content/node/content_lock/release'.$data->nid;
     $row = array();
     $row[] = l($data->title, "node/$data->nid");
     if (!$uid) {
       $row[] = theme('username', user_load(array('uid' => $data->uid)));
     }
     $row[] = format_date($data->timestamp, 'small');
-    $row[] = l(t('release lock'), "$url/$data->nid");
+    if($uid == $user->uid || user_access('administer checked out documents')) {
+      $row[] = l(t('release lock'), $url);
+    }
     $rows[] = $row;
   }
 
