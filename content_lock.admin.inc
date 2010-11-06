@@ -10,7 +10,7 @@
 function content_lock_admin_settings() {
   $form['content_lock_unload_js'] = array(
       '#type' => 'checkbox',
-      '#title' => t('Us javascript to detect leaving the node form'),
+      '#title' => t('Use javascript to detect leaving the node form'),
       '#description' => t('If you disable this, there will be no messages like "Do you really want to leave this node and lose all changes. Lock gets removed then"'),
       '#default_value' => variable_get('content_lock_unload_js', true),
   );

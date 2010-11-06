@@ -21,7 +21,7 @@ function content_lock_timeout_form_content_lock_admin_settings_alter(&$form, &$f
   $form['content_lock_timeout']['content_lock_timeout_minutes'] = array(
      '#type' => 'textfield',
      '#title' => t('Lock timeout'),
-     '#description' => t('The maximum number of minutes that each lock may be kept. Set to zero to not break locks based on time.'),
+     '#description' => t('The maximum time in minutes that each lock may be kept. Set to zero to not break locks based on time.'),
      '#default_value' => variable_get('content_lock_timeout_minutes', 120),
   );
   $form['content_lock_timeout']['content_lock_timeout_on_edit'] = array(

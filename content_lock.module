@@ -537,9 +537,9 @@ function content_lock_warn_pending_locks($uid) {
   }
 
   foreach($warned_nodes[$uid] as $lock) {
-    $editlink = l(t('editing'),"node/{$lock->nid}/edit");
-    $unlocklinkhere = l(t('here'),"admin/content/{$lock->nid}/content_lock/releaseown");
-    _content_lock_save_lock_warning(t("You are currently preventing the node '!nodetitle' from being edited. You may want to let others edit this node by clicking !unlocklinkhere, or finish !edit the node.", array ('!nodetitle' => $lock->title, '!edit' => $editlink, '!unlocklinkhere' => $unlocklinkhere)),$lock->nid);
+    $nodetitle_link = l($lock->title,"node/{$lock->nid}");
+    $releasethelock_link = l(t('release the lock'),"admin/content/{$lock->nid}/content_lock/releaseown");
+    _content_lock_save_lock_warning(t("The node '!nodetitle_link' is locked by you. You may want to '!releasethelock_link' in order to allow others to edit.", array ('!nodetitle_link' => $nodetitle_link, '!releasethelock_link' => $releasethelock_link)),$lock->nid);
   }
   $content_lock_messages_printed = true;
 }
