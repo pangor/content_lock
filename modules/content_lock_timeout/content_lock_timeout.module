@@ -21,7 +21,8 @@ function content_lock_timeout_form_content_lock_admin_settings_alter(&$form, &$f
   $form['content_lock_timeout']['content_lock_timeout_minutes'] = array(
      '#type' => 'textfield',
      '#title' => t('Lock timeout'),
-     '#description' => t('The maximum time in minutes that each lock may be kept. Set to zero to not break locks based on time.'),
+     '#description' => t('The maximum time in minutes that each lock may be kept. To disable breaking locks after a timeout, please !disable the Content Lock Timeout module.',
+			 array('!disable' => l(t('disable'), 'admin/build/modules', array('fragment' => 'edit-status-content-lock-timeout-wrapper')))),
      '#default_value' => variable_get('content_lock_timeout_minutes', 120),
   );
   $form['content_lock_timeout']['content_lock_timeout_on_edit'] = array(

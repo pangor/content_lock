@@ -13,7 +13,13 @@ function content_lock_install() {
  */
 function content_lock_uninstall() {
   drupal_uninstall_schema('content_lock');
+
   variable_del('content_lock_clear');
+  variable_del('content_lock_unload_js');
+  variable_del('content_lock_admin_cancelbutton');
+  variable_del('content_lock_admin_verbose');
+  variable_del('content_lock_allowed_node_types');
+  variable_del('content_lock_allowed_formats');
 }
 
 /*
@@ -47,6 +53,14 @@ function content_lock_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'ajax_key' => array(
+        'description' => 'A key which AJAX requests must prevent to prevent page reloads from breaking.',
+        'size' => 'normal',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
     ),
     'indexes' => array(
       'user' => array('uid'),
@@ -54,4 +68,24 @@ function content_lock_schema() {
     'primary key' => array('nid'),
   );
   return $schema;
+}
+
+/**
+ * Implementation of hook_update_N().
+ */
+function content_lock_update_6200()
+{
+  $ret = array();
+
+  db_add_field($ret, 'content_lock', 'ajax_key',
+    array(
+      'description' => 'A key which AJAX requests must prevent to prevent page reloads from breaking.',
+      'size' => 'normal',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => TRUE,
+      'default' => 0,
+    ));
+
+  return $ret;
 }
