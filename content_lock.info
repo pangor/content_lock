@@ -1,4 +1,3 @@
-; $Id$
 name = Content locking (edit lock)
 description = Prevents users to edit the same node at the same time. The second user can enter the edit-mode and gets notified
 core = 6.x
