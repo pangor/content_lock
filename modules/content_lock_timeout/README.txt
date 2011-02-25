@@ -1,4 +1,3 @@
-/* $Id$ */
 -- SUMMARY --
 
 This module extends content_lock to automatically break stale

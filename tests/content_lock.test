@@ -1,5 +1,4 @@
 <?php
-// $Id$
 /**
  * @file
  * Backport of Drupal 7 block.test with modifications, see BACKPORT.txt.
