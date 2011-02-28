@@ -64,18 +64,11 @@ function content_lock_menu() {
     'weight' => 5,
     'type' => MENU_LOCAL_TASK
   );
-  $items['node/%/canceledit'] = array (
-        'page callback' => 'content_lock_release_own_item',
-        'page arguments' => array(1),
-        'access callback' => true
-  );
-
   $items['ajax/content_lock/%/canceledit'] = array (
-        'page callback' => 'content_lock_release_own_item',
-        'page arguments' => array(2,false),
-        'access callback' => true
+    'page callback' => 'content_lock_release_own_item',
+    'page arguments' => array(2,false),
+    'access callback' => true
   );
-
   $items['admin/settings/content_lock'] = array (
     'type' => MENU_NORMAL_ITEM,
     'title' => 'Content lock',
@@ -281,48 +274,30 @@ function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
 }
 
 function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
-  if (isset($form['#id'])) {
-    if( $form['#id'] == 'comment-form' ) {
-      $node = $form['#node'];
-      $form['cancel']['#type'] = 'markup';      
-      $form['cancel']['#weight'] = 2000;
-      $form['cancel']['#value'] = l(t('Cancel'), 'node/' . $form['nid']['#value']."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
-    }
-    else if( $form['#id'] == 'user-profile-form' ) {
-      $form['buttons'] = array('#weight' => 20000);
-      $form['buttons']['submit'] = $form['submit'];
-	    $form['buttons']['submit']['#weight'] = -5;
-      if(isset($form['delete'])) {
-        $form['buttons']['delbtn'] = $form['delete'];
-        $form['buttons']['delbtn']['#weight'] = -4;
-      }
-
-      $form['buttons']['cancel']['#type'] = 'markup';
-      $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'user/' . $form['#uid'] ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
-      unset($form['submit']);
-      unset($form['delete']);
-    }
-    // edit node
-    else if($form['#id'] == 'node-form'){
-      $node = $form['#node'];
-
-      $form['buttons']['cancel']['#type'] = 'markup';
-      $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), 'node/' . $node->nid ."/canceledit", array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
-      if(isset($form['buttons']['delete'])) {
+  // If we're on the node form
+  if ($form['#id'] == 'node-form' && $node = $form['#node']) {
+    // If we're editing a node (not adding)
+    if ($node->nid) {
+      $form['buttons']['cancel'] = array(
+        '#type' => 'button',
+        '#weight' => 2000,
+        '#value' => t('Cancel'),
+        '#validate' => array('content_lock_cancel_submit'),
+      );
+    
+      if (isset($form['buttons']['delete'])) {
         $form['buttons']['delete']['#weight'] = 2001;
       }
     }
-    // add node
-    else if(($form['#id'] == 'node-form'  ) && (arg(0) == 'node') ){
-      $node = $form['#node'];
-
-      $form['buttons']['cancel']['#type'] = 'markup';
-      $form['buttons']['cancel']['#weight'] = 2000;
-      $form['buttons']['cancel']['#value'] = l(t('Cancel'), '', array( 'attributes' => array( 'class' => 'form-submit form-submit-cancel', 'rel' => 'nofollow')));
-    }
   }
+}
+
+/**
+ * Callback for a cancel request on a form
+ */
+function content_lock_cancel_submit(&$form, &$form_state) {
+  // Release the node
+  content_lock_release_own_item($form['#node']->nid);
 }
 
 /**
