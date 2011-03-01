@@ -165,9 +165,9 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
   }
 
   /** ******************* General preconditions for locking ***************** */
-  // Veto-API. Let other modules veto the locking - so force skiping out of any conditions they want
-  // We will use | logic, so if any module denies locking - we deny
-  // Be sure to noticte that content_lock also implements this api for his own vetos!
+  // Veto-API. Let other modules veto the locking - so force skipping out of any conditions they want.
+  // We will use || logic, so if any module denies locking then we deny locking.
+  // Be sure to notice that content_lock also implements this api for his own vetos!
   $skip_lock = FALSE; // no veto yet
   $result = module_invoke_all('content_lock_skip_locking', $node, $form_id, $form, $form_state);
   foreach($result as $bool) {
