@@ -621,7 +621,14 @@ function content_lock_release_own_item($nid, $response = true) {
  * Check whether a node is configured to be protected by content_lock.
  */
 function _content_lock_is_lockable_node($node) {
-  static $lockable;
+  return !in_array(FALSE, module_invoke_all('content_lock_node_lockable', $node));
+}
+
+/**
+ * Implement our own hook_content_lock_node_lockable().
+ */
+function content_lock_content_lock_node_lockable($node) {
+  static $lockable = array();
 
   // To catch the case where the user is changing the input format,
   // we store the original input format.
