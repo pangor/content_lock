@@ -15,6 +15,7 @@ function content_lock_uninstall() {
 
   variable_del('content_lock_clear');
   variable_del('content_lock_unload_js');
+  variable_del('content_lock_unload_js_message');
   variable_del('content_lock_admin_cancelbutton');
   variable_del('content_lock_admin_verbose');
   variable_del('content_lock_allowed_node_types');

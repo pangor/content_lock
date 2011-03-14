@@ -18,7 +18,7 @@
   }
 
   window.content_lock_confirm = function () {
-    return Drupal.t('Be aware, if you press "OK" now, ALL your changes will be lost!');
+    return Drupal.t(Drupal.settings.content_lock.unload_js_message);
   }
 
   $(document).ready(function() {

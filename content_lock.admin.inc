@@ -13,7 +13,13 @@ function content_lock_admin_settings() {
       '#description' => t('If you disable this, there will be no messages like &ldquo;Do you really want to leave this node and lose all changes? The lock will be removed if you proceed.&rdquo;. Also, disabling this will cause nodes to remain locked if the user avoids saving the node and does not use the cancel button (i.e., by clicking a menu link to navigate away from a node-edit page).'),
       '#default_value' => variable_get('content_lock_unload_js', true),
   );
-  
+  $form['content_lock_unload_js_message'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Javascript popup message text'),
+      '#description' => t('This option allows you to modify the text the user sees when navigating away from an edited node.'),
+      '#default_value' => variable_get('content_lock_unload_js_message', 'If you proceed, ALL of your changes will be lost.'),
+  );
+
   $form['content_lock_admin_verbose'] = array(
       '#type' => 'checkbox',
       '#title' => t('Show lock / unlock messages'),

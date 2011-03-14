@@ -260,7 +260,7 @@ function _content_lock_add_unload_js(&$form, $form_state) {
   drupal_add_js("$m/js/onUserExit.js",'module');
   drupal_add_js("$m/js/content_lock_init.js",'module');
   $lock = content_lock_fetch_lock($form['#node']->nid);
-  drupal_add_js(array('content_lock' => array('nid' => $form['#node']->nid, 'ajax_key' => $lock->ajax_key)), 'setting');
+  drupal_add_js(array('content_lock' => array('nid' => $form['#node']->nid, 'ajax_key' => $lock->ajax_key, 'unload_js_message' => variable_get('content_lock_unload_js_message', 'If you proceed, ALL of your changes will be lost.'))), 'setting');
   return $form;
 }
 
