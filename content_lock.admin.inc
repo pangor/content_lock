@@ -1,4 +1,4 @@
-<?php
+<?php /* -*- mode: php; indent-tabs-mode: nil; tab-width: 2; -*- */
 
 # Copyright (c) 2010 Impressive.media
 # Author: Eugen Mayer

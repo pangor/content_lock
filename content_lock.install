@@ -1,4 +1,4 @@
-<?php
+<?php /* -*- mode: php; indent-tabs-mode: nil; tab-width: 2; -*- */
 
 /**
  * Implementation of hook_install().
