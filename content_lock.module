@@ -363,7 +363,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
       $message .= '<br />'. t('Click <a href="!release-url">here</a> to check back in now.', array('!release-url' => url($url, array('query' => 'destination='. $_GET['q']))));
     }
     if(!empty($message)) {
-      drupal_set_message($message, 'error');
+      drupal_set_message($message, 'error', FALSE);
     }
     return FALSE;
   }
@@ -383,7 +383,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
       );
 
       if(_content_lock_verbose() && !$quiet) {
-        drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'));
+        drupal_set_message(t('This document is now locked against simultaneous editing. It will unlock when you navigate elsewhere.'), 'status', FALSE);
       }
       module_invoke_all('content_lock_locked', $nid, $uid);
     } else {
@@ -492,7 +492,7 @@ function content_lock_overview($account = NULL) {
 function content_lock_release_item($nid, $account = NULL) {
   content_lock_release($nid, $account ? $account->uid : NULL);
   if(_content_lock_verbose()) {
-    drupal_set_message(t('The editing lock has been released.'));
+    drupal_set_message(t('The editing lock has been released.'),'status', FALSE);
   }
   drupal_goto($account ? "user/{$account->uid}/content_lock" : 'admin/content/node/content_lock');
 }
@@ -558,7 +558,7 @@ function _content_lock_show_warnings() {
   }
   foreach($data as $nid => $messsage) {
     if(_content_lock_still_locked($user->uid,$nid) > 0){
-      drupal_set_message($messsage,'warning');
+      drupal_set_message($messsage,'warning', FALSE);
     }
   }
   $_SESSION['content_lock'] = '';
@@ -593,7 +593,7 @@ function content_lock_release_own_item($nid, $response = true) {
       if (strcmp($_GET['k'], $lock->ajax_key)) {
         /* the key doesn't match, don't unlock the node */
         if ($response) {
-          drupal_set_message('Trounced AJAX unlock requeset.');
+          drupal_set_message('Trounced AJAX unlock requeset.', 'status', FALSE);
         }
         exit();
       }
