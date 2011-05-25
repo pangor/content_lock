@@ -20,3 +20,10 @@ This hook gets called when a lock gets set. Implement this if you want to trigge
 <h4>hook_content_lock_released($nid)</h4>
 This hook is called after a lock has been successfully released from the node identified by $nid.
 Implement this to react to a node losing its lock.
+
+<h4>hook_content_lock_node_lockable($node)</h4>
+Implement this hook to control whether or not a node is lockable. If a
+node is lockable, a lock may be created on that node and existing
+locks on that node will be enforced. In the normal case where a node
+should be lockable, the hook should return TRUE. If one such hook
+returns FALSE, the node will not be considered lockable.

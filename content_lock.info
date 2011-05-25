@@ -1,5 +1,5 @@
-name = Content locking (edit lock)
-description = Prevents users to edit the same node at the same time. The second user can enter the edit-mode and gets notified
+name = "Content locking (edit lock)"
+description = "Prevents multiple users from trying to edit a single node simultaneously to prevent edit conflicts."
 core = 6.x
 project = "content_lock"
 package = "Drupal Wiki"

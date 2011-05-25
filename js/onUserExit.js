@@ -103,17 +103,20 @@ function attachEventListener( obj, type, func, capture ) {
 		codeToExecute = options.execute;
 
 		// add onClick function to all internal links
-		$("a").each(function() {
+		$("a, button").each(function() {
 			var obj = $(this);
 			var linkIsInternal = false;
+		    var href = obj.attr('href');
 
 			var myInternalURLs = options.internalURLs.split("|");
 
+		    if (!linkIsInternal && href != undefined) {
 			for (i = 0; i < myInternalURLs.length; i++) {
-        if (obj.attr("href") != undefined && obj.attr("href").indexOf(myInternalURLs[i]) !== -1) {
-					linkIsInternal = true;
-				}
-      }
+			    if (href.indexOf(myInternalURLs[i]) !== -1) {
+				linkIsInternal = true;
+			    }
+			}
+		    }
 
 			if (linkIsInternal == true) {
 				obj.bind("click", function(){
