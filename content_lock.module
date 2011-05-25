@@ -148,10 +148,10 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
   if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id) {
       $old_format = $node->format;
       if (!empty($node->content_lock_old_format)) {
-	$old_format = $node->content_lock_old_format;
+        $old_format = $node->content_lock_old_format;
       }
       if (!empty($form_state['values']['content_lock_old_format'])) {
-	$old_format = $form_state['values']['content_lock_old_format'];
+        $old_format = $form_state['values']['content_lock_old_format'];
       }
       // Needs to be manually set before first form submission.
       // We set this in the $node-> namespace because content_lock_nodeapi()
@@ -390,12 +390,12 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
       /* A lock already exists: update its AJAX key */
       $lock->ajax_key = rand();
       if (!drupal_write_record('content_lock', $lock, array('nid'))) {
-	/*
-	 * we encountered a race condition where the lock was deleted
-	 * between when we loaded it and when we tried to update it
-	 * with a new key. Recreate the lock then:
-	 */
-	drupal_write_record('content_lock', $lock);
+        /*
+         * we encountered a race condition where the lock was deleted
+         * between when we loaded it and when we tried to update it
+         * with a new key. Recreate the lock then:
+         */
+        drupal_write_record('content_lock', $lock);
       }
     }
   }
@@ -591,12 +591,12 @@ function content_lock_release_own_item($nid, $response = true) {
     if (!$response) {
       $lock = content_lock_fetch_lock($nid);
       if (strcmp($_GET['k'], $lock->ajax_key)) {
-	/* the key doesn't match, don't unlock the node */
-	if ($response) {
-	  drupal_set_message('Trounced AJAX unlock requeset.');
-	}
-	exit();
-	}
+        /* the key doesn't match, don't unlock the node */
+        if ($response) {
+          drupal_set_message('Trounced AJAX unlock requeset.');
+        }
+        exit();
+      }
     }
     content_lock_release($nid,$user->uid);
    // drupal_get_messages();
