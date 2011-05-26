@@ -353,7 +353,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
     }
 
     if (isset($url)) {
-      $message .= '<br />'. t('Click <a href="!release-url">here</a> to check back in now.', array('!release-url' => url($url, array('query' => 'destination='. $_GET['q']))));
+      $message .= '<br />'. t('Click !here to check back in now.', array('!here' => l('here', $url, array('query' => 'destination='. $_GET['q']))));
     }
     if(!empty($message)) {
       drupal_set_message($message, 'warning', FALSE);
