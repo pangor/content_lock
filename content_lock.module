@@ -6,10 +6,20 @@
  */
 
 /**
- * Implementation of hook_perm().
+ * Implementation of hook_permission().
  */
-function content_lock_perm() {
-  return array('check out documents', 'administer checked out documents');
+function content_lock_permission() {
+  return array(
+    'check out documents' => array(
+      'title' => t('Check Out/Lock Documents'),
+      'description' => t('Enables users to lock documents and requires them to respect locks others have made.'),
+     ),
+    'administer checked out documents' => array(
+      'title' => t('Aminister Checked Out Documents'),
+      'description' => t('Enables administrators to view and break locks made by other users.'),
+      'restrict access' => TRUE,
+     ),
+   );
 }
 
 /**
@@ -26,7 +36,7 @@ function content_lock_help($path, $arg) {
     case 'admin/content/node/content_lock':
       return '<p>'. t('Below is a list of all locked documents. Click on <em>check in</em> to release a lock.') .'</p>';
 
-    case 'user/%user/content_lock':
+    case 'user/%/content_lock':
       return '<p>'. t('Below is a list of all documents locked by you. Click on <em>check in</em> to release a lock.') .'</p>';
   }
 }
@@ -83,52 +93,94 @@ function content_lock_menu() {
 }
 
 /**
- * Implementation of hook_nodeapi().
+ * Implement hook_node_validate() to check that the user is
+ * maintaining his lock.
+ *
+ * @param $node
+ *   The node whose lock to validate.
+ * @param $form
+ *   The node's form.
+ * @param $form_state
+ *   Form state.
  */
-function content_lock_nodeapi(&$node, $op, $teaser, $page) {
+function content_lock_node_validate($node, $form, &$form_state) {
   global $user;
-  static $messages_shown = false;
 
-  switch ($op) {
-    case 'validate':
-      if (isset($node->nid) && _content_lock_is_lockable_node($node) && user_access('check out documents')) {
-        // Existing node. Check if we still own the lock.
-        if ($lock = content_lock_fetch_lock($node->nid)) {
-          if ($lock->uid != $user->uid) {
-            // Lock is no longer ours.
-            form_set_error('changed', t('Your lock has been removed!') .'<br />'. content_lock_lock_owner($lock) .'<br />'. t('You can still save the content if this user aborts the edit operation without saving changes.'));
-          }
-        }
-        else {
-          // Node is not locked. Try to re-lock if node is unchanged.
-          if (node_last_changed($node->nid) > $node->changed || !content_lock_node($node->nid, $user->uid)) {
-            form_set_error('alsochanged', t('Your lock has been removed due to inactivity or by an administrator. Failed to regain the lock since the document has been changed since.'));
-          }
-        }
+  if (isset($node->nid) && _content_lock_is_lockable_node($node) && user_access('check out documents')) {
+    // Existing node. Check if we still own the lock.
+    if ($lock = content_lock_fetch_lock($node->nid)) {
+      if ($lock->uid != $user->uid) {
+        // Lock is no longer ours.
+        form_set_error('changed', t('Your lock has been removed!') .'<br />'. content_lock_lock_owner($lock) .'<br />'. t('You can still save the content if this user aborts the edit operation without saving changes.'));
       }
-      break;
-    case 'update':
-      if (_content_lock_is_lockable_node($node)) {
-        content_lock_release($node->nid, $user->uid);
+    }
+    else {
+      // Node is not locked. Try to re-lock if node is unchanged.
+      if (node_last_changed($node->nid) > $node->changed || !content_lock_node($node->nid, $user->uid)) {
+        form_set_error('alsochanged', t('Your lock has been removed due to inactivity or by an administrator. Failed to regain the lock since the document has been changed since. Please !discard.',
+            array('!discard' => l('discard your changes', 'node/' . $node->nid))));
       }
-      break;
-    case 'delete':
-      content_lock_release($node->nid, NULL);
-      break;
-    case 'view':
-      if (!_content_lock_is_lockable_node($node)) {
-        break;
-      }
+    }
+  }
+}
 
-      if(!$messages_shown) {
-        _content_lock_show_warnings();
-        $messages_shown = true;
-      }
+/**
+ * Implement hook_node_update() to unlock a node after it's saved.
+ *
+ * This hook is invoked after hook_node_save() is invoked and after
+ * the changes to the node are actually saved to the database, so it's
+ * the right place to unlock a modified node.
+ *
+ * @param $node
+ *   The node which was saved.
+ */
+function content_lock_node_update($node) {
+  global $user;
 
-      if($node->build_mode != NODE_BUILD_PREVIEW) {
-        content_lock_warn_pending_locks($user->uid); // check if the user has pending locks and warn him
-      }
-      break;
+  if (_content_lock_is_lockable_node($node)) {
+    content_lock_release($node->nid, $user->uid);
+  }
+}
+
+/**
+ * Implement hook_node_delete() to remove references to deleted nodes
+ * from the lock tables.
+ *
+ * @param $node
+ *   The node being deleted.
+ */
+function content_lock_node_delete($node) {
+  content_lock_release($node->nid, NULL);
+}
+
+/**
+ * Implement hook_node_view() to inform user if he's holding locks on
+ * other nodes.
+ *
+ * @param $node
+ *   The node being viewed.
+ * @param $view_mode
+ *   The type of output being generated for the node.
+ * @param $langcode
+ *   The language code of the user.
+ */
+function content_lock_node_view($node, $view_mode, $langcode) {
+  global $user;
+  static $messages_shown = FALSE;
+
+  if ($view_mode != 'full'
+      || !_content_lock_is_lockable_node($node)) {
+    return;
+  }
+
+  if (!$messages_shown) {
+    _content_lock_show_warnings();
+    $messages_shown = TRUE;
+  }
+
+  if (empty($node->in_preview)) {
+    /* Check if the user has pending locks and warn him. */
+    content_lock_warn_pending_locks($user->uid);
   }
 }
 
@@ -146,6 +198,8 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
   // initialize it here.
   // Only touch node edit forms:
   if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id) {
+    /** @todo Fix node format discrimination support in drupal7 */
+    /*
       $old_format = $node->format;
       if (!empty($node->content_lock_old_format)) {
         $old_format = $node->content_lock_old_format;
@@ -162,6 +216,7 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
         '#type' => 'hidden',
         '#value' => $node->content_lock_old_format,
       );
+    */
   }
 
   /** ******************* General preconditions for locking ***************** */
@@ -254,9 +309,9 @@ function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_st
 
 function _content_lock_add_unload_js(&$form, $form_state) {
   $m = drupal_get_path('module','content_lock');
-  drupal_add_js("$m/js/jquery.url.packed.js",'module');
-  drupal_add_js("$m/js/onUserExit.js",'module');
-  drupal_add_js("$m/js/content_lock_init.js",'module');
+  drupal_add_js("$m/js/jquery.url.packed.js", array('group' => JS_LIBRARY));
+  drupal_add_js("$m/js/onUserExit.js", array('group' => JS_LIBRARY));
+  drupal_add_js("$m/js/content_lock_init.js");
   $lock = content_lock_fetch_lock($form['#node']->nid);
   drupal_add_js(array('content_lock' => array('nid' => $form['#node']->nid, 'ajax_key' => $lock->ajax_key, 'unload_js_message' => variable_get('content_lock_unload_js_message', 'If you proceed, ALL of your changes will be lost.'))), 'setting');
   return $form;
@@ -302,7 +357,12 @@ function content_lock_cancel_submit(&$form, &$form_state) {
  *   The lock for the node. FALSE, if the document is not locked.
  */
 function content_lock_fetch_lock($nid) {
-  return db_fetch_object(db_query("SELECT c.*, u.name FROM {content_lock} c LEFT JOIN {users} u ON u.uid = c.uid WHERE c.nid = %d", $nid));
+  $query = db_select('content_lock', 'c')
+    ->fields('c')
+    ->condition('c.nid', $nid);
+  $u = $query->leftJoin('users', 'u', '%alias.uid = c.uid');
+  $query->fields($u, array('name'));
+  return $query->execute()->fetchObject();
 }
 
 /**
@@ -314,18 +374,17 @@ function content_lock_fetch_lock($nid) {
  *   String with the message.
  */
 function content_lock_lock_owner($lock) {
-  $username = theme('username', $lock);
+  $username = theme('username', array('account' => user_load($lock->uid)));
   $date = format_date($lock->timestamp, 'medium');
   return t('This document is locked for editing by !name since @date.', array('!name' => $username, '@date' => $date));
 }
 
-function content_lock_user($op, $edit, $account) {
-  switch($op) {
-    case 'logout':
-      // removing all locks, as the user logs out
-      _content_lock_release_all_user_locks($account->uid);
-    break;
-  }
+/**
+ * Implement hook_user_logout().
+ */
+function content_lock_user_logout($account) {
+  // removing all locks, as the user logs out
+  _content_lock_release_all_user_locks($account->uid);
 }
 
 /**
@@ -405,18 +464,18 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
  *   If set, verify that a lock belongs to this user prior to release.
  */
 function content_lock_release($nid, $uid = NULL) {
-  $add_sql = '';
-  $args = array($nid);
-  if (isset($uid)) {
-    $add_sql = " AND uid = %d";
-    $args[] = $uid;
-  }
-  db_query("DELETE FROM {content_lock} WHERE nid = %d". $add_sql, $args);
+  $query = db_delete('content_lock')
+    ->condition('nid', $nid);
+  if (!empty($uid))
+    $query->condition('uid', $uid);
+  $query->execute();
   module_invoke_all('content_lock_released', $nid);
 }
 
 function _content_lock_release_all_user_locks($uid) {
-  db_query("DELETE FROM {content_lock} WHERE uid = %d", $uid);
+  db_delete('content_lock')
+    ->condition('uid', $uid)
+    ->execute();
 }
 
 /**
@@ -443,16 +502,24 @@ function content_lock_overview($account = NULL) {
     $header[] = t('Operations');
   }
 
-  $rows = array();
-  $add_sql = $uid ? " WHERE c.uid = %d" : '';
-  $result = pager_query('SELECT c.*, n.title, u.name FROM {content_lock} c INNER JOIN {node} n ON n.nid = c.nid INNER JOIN {users} u ON u.uid = c.uid'. $add_sql . tablesort_sql($header), 50, 0, NULL, $uid);
+  $query = db_select('content_lock', 'c')
+    ->extend('TableSort')
+    ->fields('c');
+  $n = $query->join('node', 'n', '%alias.nid = c.nid');
+  $query->fields($n, array('title'));
+  $u = $query->join('users', 'u', '%alias.uid = c.uid');
+  $query->fields($u, array('name'));
+  if ($uid)
+    $query->condition('c.uid', $uid);
+  $query->orderByHeader($header);
 
-  while ($data = db_fetch_object($result)) {
+  $rows = array();
+  foreach ($query->execute() as $data) {
     $url = $uid ? "admin/content/".$data->nid."/content_lock/releaseown" : 'admin/content/node/content_lock/release/'.$data->nid;
     $row = array();
     $row[] = l($data->title, "node/$data->nid");
     if (!$uid) {
-      $row[] = theme('username', user_load(array('uid' => $data->uid)));
+      $row[] = theme('username', array('account' => user_load($data->uid)));
     }
     $row[] = format_date($data->timestamp, 'small');
     if($uid == $user->uid || user_access('administer checked out documents')) {
@@ -461,13 +528,9 @@ function content_lock_overview($account = NULL) {
     $rows[] = $row;
   }
 
-  $output = theme('table', $header, $rows, array('id' => 'content_lock'));
-  if (!$rows) {
-    $output .= t('No locked documents.');
-  }
-  else if ($pager = theme('pager', array(), 50, 0)) {
-    $output .= $pager;
-  }
+  $output = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'content_lock'),
+                                 'empty' => t('No locked documents.')));
+  $output .= theme('pager', array('quantity' => 50));
 
   return $output;
 }
@@ -509,8 +572,13 @@ function content_lock_warn_pending_locks($uid) {
   else {
     // load form db
     $warned_nodes[$uid] = array();
-    $result = db_query("SELECT cl.nid,n.title FROM {content_lock} as cl LEFT JOIN {node} as n on cl.nid=n.nid WHERE cl.uid = %d", $uid);
-    while($lock = db_fetch_object($result)) {
+    $query = db_select('content_lock', 'c')
+      ->fields('c', array('nid'))
+      ->condition('c.uid', $uid);
+    $n = $query->leftJoin('node', 'n', '%alias.nid = c.nid');
+    $query->fields($n, array('title'));
+
+    foreach ($query->execute() as $lock) {
       $warned_nodes[$uid][] = $lock;
     }
   }
@@ -558,8 +626,12 @@ function _content_lock_show_warnings() {
 }
 
 function _content_lock_still_locked($uid,$nid) {
-  $result = db_result(db_query("SELECT count(cl.nid) FROM {content_lock} as cl  WHERE cl.uid = %d AND cl.nid=%d", $uid,$nid));
-  return $result;
+  $query = db_select('content_lock', 'c')
+    ->condition('nid', $nid)
+    ->condition('uid', $uid)
+    ->countQuery();
+  $result = $query->execute();
+  return (bool)$result->fetchCol();
 }
 
 /**
@@ -625,6 +697,9 @@ function content_lock_content_lock_node_lockable($node) {
 
   // To catch the case where the user is changing the input format,
   // we store the original input format.
+  /** @todo Fix node format discrimination support in drupal7 */
+  $format = 'unknown_format';
+  /*
   $format = $node->format;
   if (!empty($node->content_lock_old_format)) {
     $format = $node->content_lock_old_format;
@@ -633,11 +708,15 @@ function content_lock_content_lock_node_lockable($node) {
   if (isset($lockable[$format][$node->nid])) {
     return $lockable[$format][$node->nid];
   }
+  */
 
   $types = array_filter(variable_get('content_lock_allowed_node_types', array()));
   // Let other modules modify our blacklist
   drupal_alter('content_lock_node_type_blacklist', $types, $node);
+  /** @todo Fix node format discrimination support in drupal7 */
+  /*
   $formats = array_filter(variable_get('content_lock_allowed_formats', array()));
+  */
   $lockable[$format][$node->nid] = FALSE;
   // Determine if the node is of a lockable content type or text format.
   if ((empty($types) || in_array($node->type, $types))

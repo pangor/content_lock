@@ -34,11 +34,15 @@ function content_lock_admin_settings() {
       '#default_value' => variable_get('content_lock_admin_cancelbutton', true),
   );
 
+  $node_types = array();
+  foreach (node_type_get_types() as $node_type_name => $node_type) {
+    $node_types[$node_type_name] = $node_type->name;
+  }
   $form['content_lock_allowed_node_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Lockable content types'),
     '#description' => t('Apply lock to the selected content types. Leave blank for all node types to be lockable.'),
-    '#options' => node_get_types('names'),
+    '#options' => $node_types,
     '#default_value' => variable_get('content_lock_allowed_node_types', array()),
   );
 
@@ -48,7 +52,9 @@ function content_lock_admin_settings() {
     $format_options[$id] = $format->name;
   }
 
+  /** @todo Fix node format discrimination support in drupal7 */
   $form['content_lock_allowed_formats'] = array(
+    '#disabled' => TRUE,
     '#type' => 'checkboxes',
     '#title' => t('Lockable text formats'),
     '#description' => t('Apply lock to selected formats only. Leave blank for all node input formats to be lockable.'),

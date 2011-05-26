@@ -60,10 +60,12 @@ function content_lock_timeout_cron() {
 
   // We call content_lock_release() for each lock so that the
   // hook_content_lock_released may be invoked.
-  $result = db_query('SELECT nid FROM {content_lock} WHERE timestamp < %d', $last_valid_time);
+  $query = db_select('content_lock', 'c')
+    ->fields('c', array('nid'))
+    ->condition('c.timestamp', $last_valid_time, '<');
   $count = 0;
-  while ($nid = db_result($result)) {
-    content_lock_release($nid);
+  foreach ($query->execute() as $obj) {
+    content_lock_release($obj->nid);
     $count++;
   }
 
@@ -84,40 +86,36 @@ function content_lock_timeout_cron() {
  * only runs every few hours, a workflow of quick lock breaks can be
  * maintained.
  */
-function content_lock_timeout_nodeapi(&$node, $op, $teaser, $page) {
+function content_lock_timeout_node_prepare($node) {
   global $user;
   if (!variable_get('content_lock_timeout_on_edit', FALSE)) {
     return;
   }
   $timeout_minutes = variable_get('content_lock_timeout_minutes', 120);
 
-  switch ($op) {
-    case 'prepare':
-      $last_valid_time = time() - 60 * $timeout_minutes;
-      if (!empty($node->nid)                        // This is a new, unsaved node (which thus can't be locked).
-        && is_object($lock = content_lock_fetch_lock($node->nid)) // There already is a lock on this node.
-        && $lock->uid != $user->uid                 // A different user owns the lock.
-        && $lock->timestamp < $last_valid_time      // This is a stale lock.
+  $last_valid_time = time() - 60 * $timeout_minutes;
+  if (!empty($node->nid)                        // This is a new, unsaved node (which thus can't be locked).
+    && is_object($lock = content_lock_fetch_lock($node->nid)) // There already is a lock on this node.
+    && $lock->uid != $user->uid                 // A different user owns the lock.
+    && $lock->timestamp < $last_valid_time      // This is a stale lock.
 
-        // Now check a subset of the conditions that content_lock_form_alter()
-        // checks before it sets a lock. Many of the checks don't apply because
-        // we know the uid of the lock is different from the current user's uid
-        // and that the node already exists. That is, we don't need as many checks
-        // because there's already a lock on this node.
-        && user_access('check out documents')       // The user must have this permission to be able to lock
-        && ($user->uid > 0)              // A valid user is needed for locking
-      ) {
-        content_lock_release($node->nid, $lock->uid);
+      // Now check a subset of the conditions that content_lock_form_alter()
+      // checks before it sets a lock. Many of the checks don't apply because
+      // we know the uid of the lock is different from the current user's uid
+      // and that the node already exists. That is, we don't need as many checks
+      // because there's already a lock on this node.
+    && user_access('check out documents')       // The user must have this permission to be able to lock
+    && ($user->uid > 0)              // A valid user is needed for locking
+    ) {
+    content_lock_release($node->nid, $lock->uid);
 
-        if (_content_lock_verbose()) {
-          $username = theme('username', $lock);
-          $date = format_date($lock->timestamp, 'medium');
-          $stale_time = format_interval($last_valid_time - $lock->timestamp);
-          drupal_set_message(t('Breaking existing lock by !name so that you may edit this node. (This lock was set on @date and was @stale_time stale.)',
-              array('!name' => $username, '@date' => $date, '@stale_time' => $stale_time)));
-        }
-      }
-    break;
+    if (_content_lock_verbose()) {
+      $username = theme('username', array('account' => user_load($lock->uid)));
+      $date = format_date($lock->timestamp, 'medium');
+      $stale_time = format_interval($last_valid_time - $lock->timestamp);
+      drupal_set_message(t('Breaking existing lock by !name so that you may edit this node. (This lock was set on @date and was @stale_time stale.)',
+          array('!name' => $username, '@date' => $date, '@stale_time' => $stale_time)));
+    }
   }
 }
 
