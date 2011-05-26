@@ -94,8 +94,8 @@ function content_lock_timeout_nodeapi(&$node, $op, $teaser, $page) {
   switch ($op) {
     case 'prepare':
       $last_valid_time = time() - 60 * $timeout_minutes;
-      $lock = content_lock_fetch_lock($node->nid);
-      if (is_object($lock)                          // There already is a lock on this node.
+      if (!empty($node->nid)                        // This is a new, unsaved node (which thus can't be locked).
+        && is_object($lock = content_lock_fetch_lock($node->nid)) // There already is a lock on this node.
         && $lock->uid != $user->uid                 // A different user owns the lock.
         && $lock->timestamp < $last_valid_time      // This is a stale lock.
 
