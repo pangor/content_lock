@@ -353,7 +353,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
     }
 
     if (isset($url)) {
-      $message .= '<br />'. t('Click !here to check back in now.', array('!here' => l('here', $url, array('query' => 'destination='. $_GET['q']))));
+      $message .= '<br />'. t('Click !here to check back in now.', array('!here' => l(t('here'), $url, array('query' => 'destination='. $_GET['q']))));
     }
     if(!empty($message)) {
       drupal_set_message($message, 'warning', FALSE);
@@ -586,7 +586,7 @@ function content_lock_release_own_item($nid, $response = true) {
       if (strcmp($_GET['k'], $lock->ajax_key)) {
         /* the key doesn't match, don't unlock the node */
         if ($response) {
-          drupal_set_message('Trounced AJAX unlock requeset.', 'status', FALSE);
+          drupal_set_message('Trounced AJAX unlock request.', 'status', FALSE);
         }
         exit();
       }
