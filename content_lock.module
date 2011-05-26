@@ -202,11 +202,11 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
       }
       // else if($form_state['submitted'] === TRUE)
       // if it is a submission, we would not need to lock once again, as we had before.
-      // as nodeapi insert/update are not called on preview, the node should stay locked until saved or canceled.  
+      // as nodeapi insert/update are not called on preview, the node should stay locked until saved or canceled.
   }
 }
 
-/* 
+/*
  *  Implementation of our own skip_locking api to implement our logic to skip locks
  */
 function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_state) {
@@ -217,9 +217,9 @@ function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_st
   $node_type_blacklist = array(
     'user' => TRUE   // we are not allowed to lock on users form edit, as it always returns to the edit form..
   );
-  
+
   // Form ids listed here will not be locked
-  $form_id_blacklist = array( 
+  $form_id_blacklist = array(
     'comment_form' => TRUE,    // dont lock on comment forms
   );
 
@@ -240,14 +240,14 @@ function content_lock_content_lock_skip_locking($node, $form_id, $form, $form_st
     // Preconditions failed, skip the lock
     return TRUE;
   }
-  
+
   // Check if the current node type and format type is configured to be locked
   // $node->content_lock_old_format has been set in content_lock_form_alter().
   if (!_content_lock_is_lockable_node($node)) {
     // It should not be locked, so skip the lock
     return TRUE;
   }
-  
+
   // we have no veto, so lock the node
   return FALSE;
 }
@@ -277,7 +277,7 @@ function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
         '#value' => t('Cancel'),
         '#validate' => array('content_lock_cancel_submit'),
       );
-    
+
       if (isset($form['buttons']['delete'])) {
         $form['buttons']['delete']['#weight'] = 2001;
       }
@@ -351,7 +351,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
     if (user_access('administer checked out documents')) {
       $url = "admin/content/node/content_lock/release/$nid";
     }
-    
+
     if (isset($url)) {
       $message .= '<br />'. t('Click <a href="!release-url">here</a> to check back in now.', array('!release-url' => url($url, array('query' => 'destination='. $_GET['q']))));
     }
