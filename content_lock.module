@@ -183,8 +183,6 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
         $form['#after_build'][] = '_content_lock_add_unload_js';
       }
 
-      // Add some minor things to the form
-      _content_lock_add_nodeadministration($form, $form_state, $form_id);
       // Adding cancel button, if configured
       if(variable_get('content_lock_admin_cancelbutton', true)) {
         _content_lock_add_cancelbutton($form, $form_state, $form_id);
@@ -266,11 +264,6 @@ function _content_lock_add_unload_js(&$form, $form_state) {
 
 function _content_lock_verbose() {
   return variable_get('content_lock_admin_verbose', true);
-}
-
-function _content_lock_add_nodeadministration(&$form, $form_state, $form_id) {
-  $form['buttons']['#prefix'] = "<div class='buttons-wrapper'>";
-  $form['buttons']['#suffix'] = "</div>";
 }
 
 function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
