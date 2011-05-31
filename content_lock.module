@@ -15,7 +15,7 @@ function content_lock_permission() {
       'description' => t('Enables users to lock documents and requires them to respect locks others have made.'),
      ),
     'administer checked out documents' => array(
-      'title' => t('Aminister Checked Out Documents'),
+      'title' => t('Administer Checked Out Documents'),
       'description' => t('Enables administrators to view and break locks made by other users.'),
       'restrict access' => TRUE,
      ),
