@@ -198,9 +198,7 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
   // initialize it here.
   // Only touch node edit forms:
   if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id) {
-    /** @todo Fix node format discrimination support in drupal7 */
-    /*
-      $old_format = $node->format;
+    $old_format = $node->body[$node->language][0]['format'];
       if (!empty($node->content_lock_old_format)) {
         $old_format = $node->content_lock_old_format;
       }
@@ -216,7 +214,6 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
         '#type' => 'hidden',
         '#value' => $node->content_lock_old_format,
       );
-    */
   }
 
   /** ******************* General preconditions for locking ***************** */
@@ -697,10 +694,7 @@ function content_lock_content_lock_node_lockable($node) {
 
   // To catch the case where the user is changing the input format,
   // we store the original input format.
-  /** @todo Fix node format discrimination support in drupal7 */
-  $format = 'unknown_format';
-  /*
-  $format = $node->format;
+  $format = $node->body[$node->language][0]['format'];
   if (!empty($node->content_lock_old_format)) {
     $format = $node->content_lock_old_format;
   }
@@ -708,15 +702,11 @@ function content_lock_content_lock_node_lockable($node) {
   if (isset($lockable[$format][$node->nid])) {
     return $lockable[$format][$node->nid];
   }
-  */
 
   $types = array_filter(variable_get('content_lock_allowed_node_types', array()));
   // Let other modules modify our blacklist
   drupal_alter('content_lock_node_type_blacklist', $types, $node);
-  /** @todo Fix node format discrimination support in drupal7 */
-  /*
   $formats = array_filter(variable_get('content_lock_allowed_formats', array()));
-  */
   $lockable[$format][$node->nid] = FALSE;
   // Determine if the node is of a lockable content type or text format.
   if ((empty($types) || in_array($node->type, $types))

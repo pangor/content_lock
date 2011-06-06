@@ -52,9 +52,7 @@ function content_lock_admin_settings() {
     $format_options[$id] = $format->name;
   }
 
-  /** @todo Fix node format discrimination support in drupal7 */
   $form['content_lock_allowed_formats'] = array(
-    '#disabled' => TRUE,
     '#type' => 'checkboxes',
     '#title' => t('Lockable text formats'),
     '#description' => t('Apply lock to selected formats only. Leave blank for all node input formats to be lockable.'),
