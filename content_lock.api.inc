@@ -9,7 +9,15 @@
  */
 
 /**
- * Determine if locking should be disabled for a given node.
+ * @defgroup content_lock_hooks Content Lock Hooks
+ *
+ * Hooks which allow <a href="http://drupal.org/project/content_lock">content_lock</a>
+ * to be extended.
+ */
+
+/**
+ * Determine if locking should be disabled for a given node (e.g. by
+ * checking its type or other properties).
  *
  * This hook is called from content_lock_form_alter() before it
  * determines that it is altering a node modification form. Thus, some
