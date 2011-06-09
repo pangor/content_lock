@@ -1,18 +1,9 @@
 <?php /* -*- mode: php; indent-tabs-mode: nil; tab-width: 2; -*- */
 
 /**
- * Implementation of hook_install().
- */
-function content_lock_install() {
-  drupal_install_schema('content_lock');
-}
-
-/**
  * Implementation of hook_uninstall().
  */
 function content_lock_uninstall() {
-  drupal_uninstall_schema('content_lock');
-
   variable_del('content_lock_clear');
   variable_del('content_lock_unload_js');
   variable_del('content_lock_unload_js_message');
