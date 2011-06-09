@@ -9,7 +9,8 @@
  */
 
 /**
- * Determine if locking should be disabled for a given node.
+ * Determine if locking should be disabled for a given node (e.g. by
+ * checking its type or other properties).
  *
  * This hook is called from content_lock_form_alter() before it
  * determines that it is altering a node modification form. Thus, some
