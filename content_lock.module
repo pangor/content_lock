@@ -196,8 +196,8 @@ function content_lock_form_alter(&$form, &$form_state, $form_id) {
   // _content_lock_is_lockable_node() needs to know the original
   // node format. We either dig up a stashed content_lock_old_format or
   // initialize it here.
-  // Only touch node edit forms:
-  if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id) {
+  // Only touch node edit forms and then only if the form is `normal' and has a body with a format (#1183678):
+  if (is_object($node) && is_numeric($nid) && $node->type . '_node_form' == $form_id && !empty($node->body[$node->language][0]['format'])) {
     $old_format = $node->body[$node->language][0]['format'];
       if (!empty($node->content_lock_old_format)) {
         $old_format = $node->content_lock_old_format;
@@ -693,8 +693,12 @@ function content_lock_content_lock_node_lockable($node) {
   static $lockable = array();
 
   // To catch the case where the user is changing the input format,
-  // we store the original input format.
-  $format = $node->body[$node->language][0]['format'];
+  // we store the original input format. Remember that not all nodes
+  // store formats in the same way nor even have formats (#1183678).
+  $format = '';
+  if (!empty($node->body[$node->language][0]['format'])) {
+    $format = $node->body[$node->language][0]['format'];
+  }
   if (!empty($node->content_lock_old_format)) {
     $format = $node->content_lock_old_format;
   }
