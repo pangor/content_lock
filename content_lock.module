@@ -320,18 +320,18 @@ function _content_lock_verbose() {
 
 function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
   // If we're on the node form
-  if ($form['#id'] == 'node-form' && $node = $form['#node']) {
+  if (!empty($form['#node']) && ($node = $form['#node']) && $form['#id'] == $node->type . '-node-form') {
     // If we're editing a node (not adding)
     if ($node->nid) {
-      $form['buttons']['cancel'] = array(
+      $form['actions']['cancel'] = array(
         '#type' => 'button',
         '#weight' => 2000,
         '#value' => t('Cancel'),
         '#validate' => array('content_lock_cancel_submit'),
       );
 
-      if (isset($form['buttons']['delete'])) {
-        $form['buttons']['delete']['#weight'] = 2001;
+      if (isset($form['actions']['delete'])) {
+        $form['actions']['delete']['#weight'] = 2001;
       }
     }
   }
