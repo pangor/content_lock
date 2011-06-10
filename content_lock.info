@@ -1,6 +1,6 @@
 name = "Content locking (edit lock)"
 description = "Prevents multiple users from trying to edit a single node simultaneously to prevent edit conflicts."
-core = 7.x
+core = 8.x
 project = "content_lock"
 package = "Drupal Wiki"
 dependencies[] = filter
