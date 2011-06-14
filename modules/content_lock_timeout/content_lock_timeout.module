@@ -22,13 +22,13 @@ function content_lock_timeout_form_content_lock_admin_settings_alter(&$form, &$f
      '#title' => t('Lock timeout'),
      '#description' => t('The maximum time in minutes that each lock may be kept. To disable breaking locks after a timeout, please !disable the Content Lock Timeout module.',
                          array('!disable' => l(t('disable'), 'admin/build/modules', array('fragment' => 'edit-status-content-lock-timeout-wrapper')))),
-     '#default_value' => variable_get('content_lock_timeout_minutes', 120),
+     '#default_value' => variable_get('content_lock_timeout_minutes', 30),
   );
   $form['content_lock_timeout']['content_lock_timeout_on_edit'] = array(
      '#type' => 'checkbox',
      '#title' => t('Break stale locks on edit'),
      '#description' => t('By default, stale locks will be broken when cron is run. This option enables checking for stale locks when a user clicks a node\'s Edit link, enabling lower lock timeout values without having to run cron every few minutes.'),
-     '#default_value' => variable_get('content_lock_timeout_on_edit', FALSE),
+     '#default_value' => variable_get('content_lock_timeout_on_edit', TRUE),
   );
 
   // Apply some form beautification
@@ -55,7 +55,7 @@ function content_lock_timeout_admin_settings_validate($form, &$form_state) {
  * checkout module).
  */
 function content_lock_timeout_cron() {
-  $timeout_minutes = variable_get('content_lock_timeout_minutes', 120);
+  $timeout_minutes = variable_get('content_lock_timeout_minutes', 30);
   $last_valid_time = time() - 60 * $timeout_minutes;
 
   // We call content_lock_release() for each lock so that the
@@ -88,10 +88,10 @@ function content_lock_timeout_cron() {
  */
 function content_lock_timeout_node_prepare($node) {
   global $user;
-  if (!variable_get('content_lock_timeout_on_edit', FALSE)) {
+  if (!variable_get('content_lock_timeout_on_edit', TRUE)) {
     return;
   }
-  $timeout_minutes = variable_get('content_lock_timeout_minutes', 120);
+  $timeout_minutes = variable_get('content_lock_timeout_minutes', 30);
 
   $last_valid_time = time() - 60 * $timeout_minutes;
   if (!empty($node->nid)                        // This is a new, unsaved node (which thus can't be locked).
@@ -127,10 +127,10 @@ function content_lock_timeout_node_prepare($node) {
 function content_lock_timeout_content_lock_locked($nid, $uid) {
   if(_content_lock_verbose()) {
     $on_edit = '';
-    if (variable_get('content_lock_timeout_on_edit', FALSE)) {
+    if (variable_get('content_lock_timeout_on_edit', TRUE)) {
       $on_edit = ' and up for grabs';
     }
-    $time = format_interval(variable_get('content_lock_timeout_minutes', 120) * 60);
+    $time = format_interval(variable_get('content_lock_timeout_minutes', 30) * 60);
     drupal_set_message(t('Your lock will be considered stale' . $on_edit . ' in @time.',
                          array('@time' => $time)));
   }
