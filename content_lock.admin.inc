@@ -10,7 +10,7 @@ function content_lock_admin_settings() {
   $form['content_lock_unload_js'] = array(
       '#type' => 'checkbox',
       '#title' => t('Use javascript to detect leaving the node form'),
-      '#description' => t('If you disable this, there will be no messages like &ldquo;Do you really want to leave this node and lose all changes? The lock will be removed if you proceed.&rdquo;. Also, disabling this will cause nodes to remain locked if the user avoids saving the node and does not use the cancel button (i.e., by clicking a menu link to navigate away from a node-edit page).'),
+      '#description' => t('If you disable this, there will be no messages like “Do you really want to leave this node and lose all changes? The lock will be removed if you proceed.”. Also, disabling this will cause nodes to remain locked if the user avoids saving the node and does not use the cancel button (i.e., by clicking a menu link to navigate away from a node-edit page).'),
       '#default_value' => variable_get('content_lock_unload_js', true),
   );
   $form['content_lock_unload_js_message'] = array(
