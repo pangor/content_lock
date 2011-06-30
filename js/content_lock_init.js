@@ -3,7 +3,7 @@
  *   Initialize onUnload scripts.
  */
 
-(function($) {
+Drupal.behaviors.content_lock = function() {
   window.content_lock_onleave = function  () {
     var nid = Drupal.settings.content_lock.nid;
     var ajax_key = Drupal.settings.content_lock.ajax_key;
@@ -26,4 +26,4 @@
       internalURLs: 'canceledit|trash/confirm|edit'
     });
   });
-})(jQuery);
+};
