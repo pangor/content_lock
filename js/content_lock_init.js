@@ -3,15 +3,13 @@
  *   Initialize onUnload scripts.
  */
 
-(function($) {
+Drupal.behaviors.content_lock = function() {
   window.content_lock_onleave = function  () {
     var nid = Drupal.settings.content_lock.nid;
     var ajax_key = Drupal.settings.content_lock.ajax_key;
-    var protocol = $(location).attr('protocol');
-    var host  = $(location).attr('host');
-    var aurl = protocol+host+Drupal.settings.basePath + 'index.php?q=ajax/content_lock/'+nid+'/canceledit&k='+ajax_key;
     $.ajax({
-      url:   aurl,
+      url: Drupal.settings.basePath + 'ajax/content_lock/'+nid+'/canceledit',
+      data: {k: ajax_key},
       async: false,
       cache: false
     });
@@ -28,4 +26,4 @@
       internalURLs: 'canceledit|trash/confirm|edit'
     });
   });
-})(jQuery);
+};
