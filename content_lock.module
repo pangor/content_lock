@@ -69,7 +69,7 @@ function content_lock_menu() {
     'page arguments' => array(2,false),
     'access callback' => true
   );
-  $items['admin/settings/content_lock'] = array (
+  $items['admin/content/content_lock'] = array (
     'type' => MENU_NORMAL_ITEM,
     'title' => 'Content lock',
     'description' => 'Configuration options for the Content lock module',

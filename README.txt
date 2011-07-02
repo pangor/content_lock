@@ -40,7 +40,7 @@ For integrating modules with content_lock, see:
      profile page. This is intended for administrators or moderators
      only.
 
-3. Configure the module at Site Configuration >> Content lock.
+3. Configure the module at Content management >> Content lock.
 
     Use javascript to detect leaving the node form - Automatically unlock nodes
       when users navigate away from a node edit page by clicking miscellaneous
