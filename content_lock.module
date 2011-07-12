@@ -33,7 +33,7 @@ function content_lock_help($path, $arg) {
       $output .= '<p>'. t('Users may also permanently lock content, to prevent others from editing it.  Content locks that have been "forgotten" can be automatically released after a configurable time span.') .'</p>';
       return $output;
 
-    case 'admin/content/node/content_lock':
+    case 'admin/content/content_lock':
       return '<p>'. t('Below is a list of all locked documents. Click on <em>check in</em> to release a lock.') .'</p>';
 
     case 'user/%/content_lock':
@@ -45,7 +45,7 @@ function content_lock_help($path, $arg) {
  * Implementation of hook_menu().
  */
 function content_lock_menu() {
-  $items['admin/content/node/content_lock'] = array(
+  $items['admin/content/content_lock'] = array(
     'title' => 'Locked documents',
     'page callback' => 'content_lock_overview',
     'access callback' => 'user_access',
@@ -53,9 +53,9 @@ function content_lock_menu() {
     'weight' => 5,
     'type' => MENU_LOCAL_TASK,
   );
-  $items['admin/content/node/content_lock/release'] = array(
+  $items['admin/content/content_lock/release'] = array(
     'page callback' => 'content_lock_release_item',
-    'page arguments' => array(5, NULL),
+    'page arguments' => array(4, NULL),
     'access arguments' => array('administer checked out documents'),
     'type' => MENU_CALLBACK,
   );
@@ -79,7 +79,7 @@ function content_lock_menu() {
     'page arguments' => array(2,false),
     'access callback' => true
   );
-  $items['admin/settings/content_lock'] = array (
+  $items['admin/config/content/content_lock'] = array (
     'type' => MENU_NORMAL_ITEM,
     'title' => 'Content lock',
     'description' => 'Configuration options for the Content lock module',
@@ -405,7 +405,7 @@ function content_lock_node($nid, $uid, $quiet = FALSE) {
   if ($lock != FALSE && $lock->uid != $uid) {
     $message = content_lock_lock_owner($lock);
     if (user_access('administer checked out documents')) {
-      $url = "admin/content/node/content_lock/release/$nid";
+      $url = "admin/content/content_lock/release/$nid";
     }
 
     if (isset($url)) {
@@ -512,7 +512,7 @@ function content_lock_overview($account = NULL) {
 
   $rows = array();
   foreach ($query->execute() as $data) {
-    $url = $uid ? "admin/content/".$data->nid."/content_lock/releaseown" : 'admin/content/node/content_lock/release/'.$data->nid;
+    $url = $uid ? "admin/content/".$data->nid."/content_lock/releaseown" : 'admin/content/content_lock/release/'.$data->nid;
     $row = array();
     $row[] = l($data->title, "node/$data->nid");
     if (!$uid) {
@@ -547,7 +547,7 @@ function content_lock_release_item($nid, $account = NULL) {
   if(_content_lock_verbose()) {
     drupal_set_message(t('The editing lock has been released.'),'status', FALSE);
   }
-  drupal_goto($account ? "user/{$account->uid}/content_lock" : 'admin/content/node/content_lock');
+  drupal_goto($account ? "user/{$account->uid}/content_lock" : 'admin/content/content_lock');
 }
 
 /**
