@@ -24,10 +24,10 @@ function content_lock_help($path, $arg) {
       return $output;
 
     case 'admin/content/node/content_lock':
-      return '<p>'. t('Below is a list of all locked documents. Click on <em>check in</em> to release a lock.') .'</p>';
+      return '<p>'. t('Below is a list of all locked documents. Click on <em>!checkin</em> to release a lock.', array('!checkin' => t('release lock'))) .'</p>';
 
     case 'user/%user/content_lock':
-      return '<p>'. t('Below is a list of all documents locked by you. Click on <em>check in</em> to release a lock.') .'</p>';
+      return '<p>'. t('Below is a list of all documents locked by you. Click on <em>!checkin</em> to release a lock.', array('!checkin' => t('release lock'))) .'</p>';
   }
 }
 
