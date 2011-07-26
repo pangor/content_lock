@@ -57,7 +57,7 @@ function hook_content_lock_skip_locking($node, $form_id, $form, $form_state) {
     return TRUE;
   }
 
-  /* By default allo locking. */
+  /* By default allow locking. */
   return FALSE;
 }
 
@@ -169,6 +169,10 @@ function hook_content_lock_release($nid, $uid = NULL) {
  * this hook can control whether or not content_lock is completely
  * disabled for a node (such that even recorded locks for a node can
  * be ignored with this hook).
+ *
+ * What this hook does NOT do is prevent someone from editing an
+ * un-lockable node. There is not yet a method of doing this without
+ * hooking into the node hooks system yourself.
  *
  * @param $node
  *   The node whose lockability should be checked.
