@@ -320,7 +320,7 @@ function _content_lock_verbose() {
 
 function _content_lock_add_cancelbutton(&$form, $form_state, $form_id) {
   // If we're on the node form
-  if (!empty($form['#node']) && ($node = $form['#node']) && $form['#id'] == $node->type . '-node-form') {
+  if (!empty($form['#node']) && ($node = $form['#node']) && $form_id == $node->type . '_node_form') {
     // If we're editing a node (not adding)
     if ($node->nid) {
       $form['actions']['cancel'] = array(
